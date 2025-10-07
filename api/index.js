@@ -35,6 +35,11 @@ const allowedOrigins = [
   // Permitir domínios ngrok
   /^https:\/\/.*\.ngrok-free\.app$/,
   /^https:\/\/.*\.ngrok\.io$/,
+  // Permitir domínios Vercel
+  /^https:\/\/.*\.vercel\.app$/,
+  /^https:\/\/.*\.vercel\.dev$/,
+  // Permitir domínios Render
+  /^https:\/\/.*\.onrender\.com$/,
   // Permitir qualquer origem durante desenvolvimento
   "*"
 ];
@@ -43,6 +48,12 @@ app.use(cors({
   origin: function (origin, callback) {
     // Permitir requests sem origin (como mobile apps)
     if (!origin) return callback(null, true);
+    
+    // Em produção, ser mais permissivo para evitar problemas
+    if (process.env.NODE_ENV === 'production') {
+      console.log('🌐 Origin permitida (produção):', origin);
+      return callback(null, true);
+    }
     
     // Verificar se a origin está na lista permitida
     const isAllowed = allowedOrigins.some(allowedOrigin => {
@@ -63,7 +74,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
 }));
 
 
