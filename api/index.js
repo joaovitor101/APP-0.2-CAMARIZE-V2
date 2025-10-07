@@ -107,6 +107,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ✅ Middleware de bloqueio DEVE VIR ANTES das rotas
+import requestRoutes from './routes/requestRoutes.js';
+import { BlockMembersWrite } from './middleware/Auth.js';
+app.use(BlockMembersWrite);
+
 // ✅ Registra as rotas
 app.use('/users', userRoutes);
 app.use('/fazendas', fazendaRoutes);
@@ -121,10 +126,6 @@ app.use('/test', testRoutes);
 app.use('/parametros', parametrosRoutes);
 app.use('/chat', chatRoutes);
 app.use('/dietas', dietaRoutes);
-import requestRoutes from './routes/requestRoutes.js';
-import { BlockMembersWrite } from './middleware/Auth.js';
-// Bloqueio global de escrita para membros (exceto /requests)
-app.use(BlockMembersWrite);
 app.use('/requests', requestRoutes);
 // ✅ Conecta ao MongoDB Atlas
 const mongoUrl = process.env.MONGO_URL || "mongodb://localhost:27017/camarize";

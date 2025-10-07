@@ -67,10 +67,12 @@ export const BlockMembersWrite = async (req, res, next) => {
     const isWrite = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
     if (!isWrite) return next();
 
-    // Permitir que membros criem solicitações
+    // Permitir rotas públicas (sem autenticação)
     if (req.path && req.path.startsWith('/requests')) return next();
     if (req.path && req.path.startsWith('/users/auth')) return next();
     if (req.path && req.path.startsWith('/users/register')) return next();
+    if (req.path && req.path.startsWith('/users/user')) return next(); // Cadastro básico
+    if (req.path && req.path.startsWith('/parametros/cadastrar')) return next(); // ESP32
 
     // Validar token localmente (não obrigar GETs)
     const authToken = req.headers["authorization"]; 
