@@ -35,11 +35,6 @@ const allowedOrigins = [
   // Permitir domínios ngrok
   /^https:\/\/.*\.ngrok-free\.app$/,
   /^https:\/\/.*\.ngrok\.io$/,
-  // Permitir domínios Vercel
-  /^https:\/\/.*\.vercel\.app$/,
-  /^https:\/\/.*\.vercel\.dev$/,
-  // Permitir domínios Render
-  /^https:\/\/.*\.onrender\.com$/,
   // Permitir qualquer origem durante desenvolvimento
   "*"
 ];
@@ -48,12 +43,6 @@ app.use(cors({
   origin: function (origin, callback) {
     // Permitir requests sem origin (como mobile apps)
     if (!origin) return callback(null, true);
-    
-    // Em produção, ser mais permissivo para evitar problemas
-    if (process.env.NODE_ENV === 'production') {
-      console.log('🌐 Origin permitida (produção):', origin);
-      return callback(null, true);
-    }
     
     // Verificar se a origin está na lista permitida
     const isAllowed = allowedOrigins.some(allowedOrigin => {
@@ -74,7 +63,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
 
 
@@ -107,11 +96,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ✅ Middleware de bloqueio DEVE VIR ANTES das rotas
-import requestRoutes from './routes/requestRoutes.js';
-import { BlockMembersWrite } from './middleware/Auth.js';
-app.use(BlockMembersWrite);
-
 // ✅ Registra as rotas
 app.use('/users', userRoutes);
 app.use('/fazendas', fazendaRoutes);
@@ -126,6 +110,10 @@ app.use('/test', testRoutes);
 app.use('/parametros', parametrosRoutes);
 app.use('/chat', chatRoutes);
 app.use('/dietas', dietaRoutes);
+import requestRoutes from './routes/requestRoutes.js';
+import { BlockMembersWrite } from './middleware/Auth.js';
+// Bloqueio global de escrita para membros (exceto /requests)
+app.use(BlockMembersWrite);
 app.use('/requests', requestRoutes);
 // ✅ Conecta ao MongoDB Atlas
 const mongoUrl = process.env.MONGO_URL || "mongodb://localhost:27017/camarize";
