@@ -32,39 +32,16 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
-  // Permitir domínios ngrok
-  /^https:\/\/.*\.ngrok-free\.app$/,
-  /^https:\/\/.*\.ngrok\.io$/,
-  // Permitir qualquer origem durante desenvolvimento
+
   "*"
 ];
 
 app.use(cors({
-  origin: function (origin, callback) {
-    // Permitir requests sem origin (como mobile apps)
-    if (!origin) return callback(null, true);
-    
-    // Verificar se a origin está na lista permitida
-    const isAllowed = allowedOrigins.some(allowedOrigin => {
-      if (typeof allowedOrigin === 'string') {
-        return origin === allowedOrigin;
-      } else if (allowedOrigin instanceof RegExp) {
-        return allowedOrigin.test(origin);
-      }
-      return false;
-    });
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.log('🚫 Origin bloqueada:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
+  origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
+
 
 
 // 🧠 Esses dois devem vir ANTES das rotas
