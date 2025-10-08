@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import Modal from '../../components/Modal';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +21,8 @@ export default function AdminPanel() {
   const [sensores, setSensores] = useState([]); // mantemos carregado para futuras funcionalidades
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showNewTipoModal, setShowNewTipoModal] = useState(false);
+  const [newTipoNome, setNewTipoNome] = useState('');
   const [swapForm, setSwapForm] = useState({ cativeiroId: '', temperatura: false, ph: false, amonia: false });
   const [linkForm, setLinkForm] = useState({ cativeiroId: '', temperatura: false, ph: false, amonia: false, allowed: { temperatura: true, ph: true, amonia: true } });
   const [loading, setLoading] = useState(true);
@@ -77,6 +80,31 @@ export default function AdminPanel() {
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
   const getToken = () => (typeof window !== 'undefined' ? (sessionStorage.getItem('token') || localStorage.getItem('token')) : null);
+
+  // Deriva o tipo do sensor a partir de múltiplas fontes
+  const getSensorType = (sensor) => {
+    // 1) direto do objeto
+    const direct = String(sensor && sensor.id_tipo_sensor || sensor && sensor.tipo || '').toLowerCase();
+    if (direct) return direct;
+    // 2) lookup pelo id (string ou objeto)
+    const sid = typeof sensor === 'string' ? sensor : (sensor?._id || sensor?.id);
+    if (sid) {
+      const full = (sensores || []).find(x => String(x._id) === String(sid));
+      const fromLookup = String(full?.id_tipo_sensor || '').toLowerCase();
+      if (fromLookup) return fromLookup;
+      // 3) heurística pelo apelido
+      const alias = String(full?.apelido || '').toLowerCase();
+      if (alias.includes('temp')) return 'temperatura';
+      if (alias.includes('ph')) return 'ph';
+      if (alias.includes('amonia') || alias.includes('nh3')) return 'amonia';
+    }
+    // 4) heurística pelo próprio apelido no objeto parcial
+    const aliasLocal = String(sensor && sensor.apelido || '').toLowerCase();
+    if (aliasLocal.includes('temp')) return 'temperatura';
+    if (aliasLocal.includes('ph')) return 'ph';
+    if (aliasLocal.includes('amonia') || aliasLocal.includes('nh3')) return 'amonia';
+    return '';
+  };
 
   const load = async () => {
     try {
@@ -398,17 +426,27 @@ export default function AdminPanel() {
   };
 
   const solicitarVinculoSensores = async (cativeiro) => {
-    // Verifica quais tipos já existem para esse cativeiro
-    const tiposAtuais = new Set((cativeiro.sensores || []).map(s => String(s.id_tipo_sensor || '').toLowerCase()));
+    // Garante sensores atualizados antes de calcular faltantes
+    let sensoresAtuais = Array.isArray(cativeiro.sensores) && cativeiro.sensores.length > 0 ? cativeiro.sensores : [];
+    try {
+      if (sensoresAtuais.length === 0) {
+        const token = getToken();
+        const res = await axios.get(`${apiUrl}/cativeiros/${cativeiro._id}/sensores`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const raw = Array.isArray(res.data) ? res.data : [];
+        sensoresAtuais = raw.map(item => item?.id_sensor || item).filter(Boolean);
+      }
+    } catch {}
+
+    const tiposAtuais = new Set((sensoresAtuais || []).map(s => getSensorType(s)).filter(Boolean));
     const faltaTemperatura = !tiposAtuais.has('temperatura');
     const faltaPh = !tiposAtuais.has('ph');
     const faltaAmonia = !tiposAtuais.has('amonia');
-    // Se não faltar nenhum, não permite solicitar
+
     if (!faltaTemperatura && !faltaPh && !faltaAmonia) {
       alert('Este cativeiro já possui sensores de temperatura, pH e amônia.');
       return;
     }
-    // Abre modal para escolher quais faltantes deseja solicitar
+
     setLinkForm({
       cativeiroId: cativeiro._id,
       temperatura: false,
@@ -930,7 +968,7 @@ export default function AdminPanel() {
                                       color: '#3730a3',
                                       fontWeight: 600,
                                       textTransform: 'uppercase'
-                                    }}>{(s.id_tipo_sensor || 'sensor')}</span>
+                                    }}>{getSensorType(s) || 'sensor'}</span>
                                     <span style={{ fontWeight: 600 }}>{s.apelido || '—'}</span>
                                   </div>
                                 ))}
@@ -1033,7 +1071,19 @@ export default function AdminPanel() {
                 <div ref={chatEndRef} />
               </div>
               <div style={{ padding: 8, borderTop: '1px solid #eee', display: 'flex', gap: 8 }}>
-                <input value={chatText} onChange={(e) => setChatText(e.target.value)} placeholder="Digite sua mensagem..." style={{ flex: 1, padding: 8, border: '1px solid #ddd', borderRadius: 6 }} />
+                <textarea
+                  value={chatText}
+                  onChange={(e) => setChatText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendChatMessage();
+                    }
+                  }}
+                  placeholder="Digite sua mensagem..."
+                  rows={2}
+                  style={{ flex: 1, padding: 8, border: '1px solid #ddd', borderRadius: 6, resize: 'none' }}
+                />
                 <button onClick={sendChatMessage} disabled={!chatSelectedId || !chatText.trim()} style={{ padding: '8px 12px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 6, cursor: (!chatSelectedId || !chatText.trim()) ? 'not-allowed' : 'pointer' }}>Enviar</button>
               </div>
             </div>
@@ -1080,16 +1130,16 @@ export default function AdminPanel() {
             <h3 style={{ marginTop: 0 }}>Solicitar vínculo de sensores</h3>
             <p style={{ marginTop: 0, color: '#555' }}>Selecione os tipos de sensores que deseja vincular neste cativeiro.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '12px 0' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: linkForm.allowed.temperatura ? 1 : 0.5 }}>
-                <input type="checkbox" disabled={!linkForm.allowed.temperatura} checked={linkForm.temperatura} onChange={(e) => setLinkForm(f => ({ ...f, temperatura: e.target.checked }))} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: linkForm.allowed.temperatura ? 1 : 0.5, pointerEvents: linkForm.allowed.temperatura ? 'auto' : 'none' }} title={linkForm.allowed.temperatura ? '' : 'Já possui sensor de temperatura'}>
+                <input type="checkbox" disabled={!linkForm.allowed.temperatura} checked={linkForm.temperatura} onChange={(e) => { if (!linkForm.allowed.temperatura) return; setLinkForm(f => ({ ...f, temperatura: e.target.checked })); }} />
                 Temperatura
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: linkForm.allowed.ph ? 1 : 0.5 }}>
-                <input type="checkbox" disabled={!linkForm.allowed.ph} checked={linkForm.ph} onChange={(e) => setLinkForm(f => ({ ...f, ph: e.target.checked }))} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: linkForm.allowed.ph ? 1 : 0.5, pointerEvents: linkForm.allowed.ph ? 'auto' : 'none' }} title={linkForm.allowed.ph ? '' : 'Já possui sensor de pH'}>
+                <input type="checkbox" disabled={!linkForm.allowed.ph} checked={linkForm.ph} onChange={(e) => { if (!linkForm.allowed.ph) return; setLinkForm(f => ({ ...f, ph: e.target.checked })); }} />
                 pH
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: linkForm.allowed.amonia ? 1 : 0.5 }}>
-                <input type="checkbox" disabled={!linkForm.allowed.amonia} checked={linkForm.amonia} onChange={(e) => setLinkForm(f => ({ ...f, amonia: e.target.checked }))} />
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: linkForm.allowed.amonia ? 1 : 0.5, pointerEvents: linkForm.allowed.amonia ? 'auto' : 'none' }} title={linkForm.allowed.amonia ? '' : 'Já possui sensor de amônia'}>
+                <input type="checkbox" disabled={!linkForm.allowed.amonia} checked={linkForm.amonia} onChange={(e) => { if (!linkForm.allowed.amonia) return; setLinkForm(f => ({ ...f, amonia: e.target.checked })); }} />
                 Amônia
               </label>
             </div>
@@ -1100,9 +1150,9 @@ export default function AdminPanel() {
                   const token = getToken();
                   const headers = { Authorization: `Bearer ${token}` };
                   const tipos = [];
-                  if (linkForm.temperatura) tipos.push('temperatura');
-                  if (linkForm.ph) tipos.push('ph');
-                  if (linkForm.amonia) tipos.push('amonia');
+                  if (linkForm.allowed.temperatura && linkForm.temperatura) tipos.push('temperatura');
+                  if (linkForm.allowed.ph && linkForm.ph) tipos.push('ph');
+                  if (linkForm.allowed.amonia && linkForm.amonia) tipos.push('amonia');
                   if (tipos.length === 0) { alert('Selecione pelo menos um tipo para vincular.'); return; }
                   await axios.post(`${apiUrl}/requests`, {
                     action: 'editar_cativeiro_add_sensor',
@@ -1191,20 +1241,7 @@ export default function AdminPanel() {
                   </select>
                   <button
                     type="button"
-                    onClick={async () => {
-                      const novoNome = prompt('Digite o nome do novo tipo de camarão:');
-                      if (novoNome && novoNome.trim()) {
-                        try {
-                          const token = getToken();
-                          const headers = { Authorization: `Bearer ${token}` };
-                          const response = await axios.post(`${apiUrl}/camaroes`, { nome: novoNome.trim() }, { headers });
-                          setNewCativeiro(prev => ({ ...prev, id_tipo_camarao: response.data._id }));
-                          await load(); // Recarrega para incluir o novo tipo
-                        } catch (e) {
-                          alert('Erro ao criar tipo de camarão: ' + (e?.response?.data?.error || e.message));
-                        }
-                      }
-                    }}
+                    onClick={() => { setNewTipoNome(''); setShowNewTipoModal(true); }}
                     style={{
                       padding: '10px 12px',
                       background: '#10b981',
@@ -1303,6 +1340,46 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+
+      <Modal isOpen={showNewTipoModal} onClose={() => setShowNewTipoModal(false)} title="Novo tipo de camarão">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: '14px', fontWeight: '500', color: '#374151' }}>Nome</label>
+            <input
+              type="text"
+              value={newTipoNome}
+              onChange={(e) => setNewTipoNome(e.target.value)}
+              placeholder="Ex: Rosa, preto"
+              autoFocus
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: '14px' }}
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={() => setShowNewTipoModal(false)} style={{ padding: '8px 16px', background: '#6b7280', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Cancelar</button>
+            <button
+              onClick={async () => {
+                try {
+                  const nome = (newTipoNome || '').trim();
+                  if (!nome) return;
+                  const token = getToken();
+                  const headers = { Authorization: `Bearer ${token}` };
+                  const response = await axios.post(`${apiUrl}/camaroes`, { nome }, { headers });
+                  setShowNewTipoModal(false);
+                  setNewTipoNome('');
+                  setNewCativeiro(prev => ({ ...prev, id_tipo_camarao: response.data._id }));
+                  await load();
+                } catch (e) {
+                  alert('Erro ao criar tipo de camarão: ' + (e?.response?.data?.error || e.message));
+                }
+              }}
+              disabled={!newTipoNome.trim()}
+              style={{ padding: '8px 16px', background: newTipoNome.trim() ? '#10b981' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 6, cursor: newTipoNome.trim() ? 'pointer' : 'not-allowed' }}
+            >
+              Salvar
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

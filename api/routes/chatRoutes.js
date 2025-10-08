@@ -9,6 +9,7 @@ router.get('/conversations/mine', Auth.Authorization, chatController.listMyConve
 router.get('/conversations/:id/messages', Auth.Authorization, chatController.getMessages);
 router.post('/conversations/:id/messages', Auth.Authorization, chatController.sendMessage);
 router.post('/conversations/:id/read', Auth.Authorization, chatController.markRead);
+router.delete('/conversations/:id', Auth.Authorization, chatController.deleteConversation);
 
 export default router;
 

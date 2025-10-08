@@ -74,6 +74,31 @@ export async function markRead(req, res) {
   }
 }
 
-export default { upsertConversation, listMyConversations, getMessages, sendMessage, markRead };
+export async function deleteConversation(req, res) {
+  try {
+    ensureAdminOrMaster(req.loggedUser);
+    if (req.loggedUser.role !== 'master') {
+      const err = new Error('Somente o Master pode apagar conversas');
+      err.status = 403;
+      throw err;
+    }
+    const { id } = req.params; // conversationId
+    const conv = await Conversation.findById(id);
+    if (!conv) return res.status(404).json({ error: 'Conversa não encontrada' });
+    const isParticipant = (conv.participants || []).some(p => String(p) === String(req.loggedUser.id));
+    if (!isParticipant) {
+      const err = new Error('Acesso negado a esta conversa');
+      err.status = 403;
+      throw err;
+    }
+    const delMsgs = await Message.deleteMany({ conversationId: id });
+    await Conversation.findByIdAndDelete(id);
+    res.json({ ok: true, deletedMessages: delMsgs?.deletedCount || 0, conversationId: id });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+}
+
+export default { upsertConversation, listMyConversations, getMessages, sendMessage, markRead, deleteConversation };
 
 

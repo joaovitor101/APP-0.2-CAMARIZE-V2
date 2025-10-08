@@ -30,6 +30,7 @@ export default function MasterPanel() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatText, setChatText] = useState('');
   const chatEndRef = useRef(null);
+  const [showChatMenu, setShowChatMenu] = useState(false);
   const getMyId = () => {
     const fromUser = user?.id || user?._id;
     const stored = (typeof window !== 'undefined') ? (JSON.parse(sessionStorage.getItem('usuarioCamarize') || localStorage.getItem('usuarioCamarize') || '{}')) : {};
@@ -161,7 +162,7 @@ export default function MasterPanel() {
       tick();
       timer = setInterval(tick, 5000);
     }
-    return () => { if (timer) clearInterval(timer); };
+    return () => { if (timer) clearInterval(timer); setShowChatMenu(false); };
   }, [tab, chatSelectedId]);
 
   const openConversation = async (convId) => {
@@ -1211,7 +1212,49 @@ export default function MasterPanel() {
               </div>
             </div>
             <div style={{ border: '1px solid #eee', borderRadius: 8, display: 'flex', flexDirection: 'column', height: '65vh', overflow: 'hidden' }}>
-              <div style={{ padding: 8, background: '#f9fafb', borderBottom: '1px solid #eee', fontWeight: 600 }}>Mensagens</div>
+              <div style={{ padding: 8, background: '#f9fafb', borderBottom: '1px solid #eee', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+                <div style={{ flex: 1 }}>Mensagens</div>
+                {chatSelectedId && (
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      aria-label="Ações do chat"
+                      title="Mais ações"
+                      onClick={() => setShowChatMenu(v => !v)}
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4 }}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="5" r="1.5" fill="#111827" />
+                        <circle cx="12" cy="12" r="1.5" fill="#111827" />
+                        <circle cx="12" cy="19" r="1.5" fill="#111827" />
+                      </svg>
+                    </button>
+                    {showChatMenu && (
+                      <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 6, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', minWidth: 180, zIndex: 10 }}>
+                        <button
+                          onClick={async () => {
+                            try {
+                              setShowChatMenu(false);
+                              if (!confirm('Apagar toda a conversa? Esta ação não pode ser desfeita.')) return;
+                              const token = getToken();
+                              const headers = { Authorization: `Bearer ${token}` };
+                              await axios.delete(`${apiUrl}/chat/conversations/${chatSelectedId}`, { headers });
+                              // Remove da lista local e limpa mensagens
+                              setChatConversations(prev => prev.filter(c => c._id !== chatSelectedId));
+                              setChatSelectedId('');
+                              setChatMessages([]);
+                            } catch (e) {
+                              alert('Erro ao apagar conversa: ' + (e?.response?.data?.error || e.message));
+                            }
+                          }}
+                          style={{ display: 'block', width: '100%', padding: '10px 12px', background: 'transparent', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                        >
+                          Apagar conversa
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div style={{ flex: 1, padding: 10, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'none' }}>
                 {chatSelectedId && chatMessages.map(m => {
                   const isMine = String(m.senderId) === String(getMyId());
@@ -1231,7 +1274,19 @@ export default function MasterPanel() {
                 <div ref={chatEndRef} />
               </div>
               <div style={{ padding: 8, borderTop: '1px solid #eee', display: 'flex', gap: 8 }}>
-                <input value={chatText} onChange={(e) => setChatText(e.target.value)} placeholder="Digite sua mensagem..." style={{ flex: 1, padding: 8, border: '1px solid #ddd', borderRadius: 6 }} />
+                <textarea
+                  value={chatText}
+                  onChange={(e) => setChatText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendChatMessage();
+                    }
+                  }}
+                  placeholder="Digite sua mensagem..."
+                  rows={2}
+                  style={{ flex: 1, padding: 8, border: '1px solid #ddd', borderRadius: 6, resize: 'none' }}
+                />
                 <button onClick={sendChatMessage} disabled={!chatSelectedId || !chatText.trim()} style={{ padding: 8, background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 6, cursor: (!chatSelectedId || !chatText.trim()) ? 'not-allowed' : 'pointer' }}>Enviar</button>
               </div>
             </div>
