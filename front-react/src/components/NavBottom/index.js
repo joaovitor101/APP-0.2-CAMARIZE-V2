@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
 import styles from "./NavBottom.module.css";
 
-export default function NavBottom({ homeRef, settingsRef, notificationsRef, profileRef }) {
+export default function NavBottom({ homeRef, settingsRef, requestsRef, notificationsRef, profileRef }) {
   const router = useRouter();
   return (
     <nav className={styles.navBottom}>
@@ -10,7 +10,7 @@ export default function NavBottom({ homeRef, settingsRef, notificationsRef, prof
       {/* <button ref={plusRef} onClick={() => router.push('/create-cativeiros')} className={styles.plusButton}>
         <img src="/images/plus.svg" alt="Adicionar" className={styles.plusIcon} />
       </button> */}
-      <button onClick={() => router.push('/requests')} title="Minhas Solicitações">
+      <button ref={requestsRef} onClick={() => router.push('/requests')} title="Minhas Solicitações">
         <img src="/images/history.svg" alt="Minhas Solicitações" />
       </button>
       <button ref={notificationsRef} onClick={() => router.push('/notifications')}><img src="/images/bell.svg" alt="Notificações" /></button>

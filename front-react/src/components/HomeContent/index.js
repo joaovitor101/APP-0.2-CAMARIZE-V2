@@ -35,6 +35,7 @@ export default function HomeContent() {
   const navHomeRef = useRef(null);
   const navSettingsRef = useRef(null);
   const navPlusRef = useRef(null);
+  const navRequestsRef = useRef(null);
   const navNotificationsRef = useRef(null);
   const navProfileRef = useRef(null);
 
@@ -416,6 +417,7 @@ export default function HomeContent() {
         homeRef={navHomeRef}
         settingsRef={navSettingsRef}
         plusRef={navPlusRef}
+        requestsRef={navRequestsRef}
         notificationsRef={navNotificationsRef}
         profileRef={navProfileRef}
       />
@@ -435,6 +437,7 @@ export default function HomeContent() {
               { ref: navHomeRef, title: 'Início', content: 'Volte para a tela inicial a qualquer momento.', placement: 'top' },
               { ref: navSettingsRef, title: 'Configurações', content: 'Ajuste preferências e integrações.', placement: 'top' },
               { ref: navPlusRef, title: 'Atalho de Cadastro', content: 'Adicione cativeiros rapidamente por aqui.', placement: 'top' },
+              { ref: navRequestsRef, title: 'Histórico de Solicitações', content: 'Visualize todas as suas solicitações enviadas e acompanhe o status de cada uma.', placement: 'top' },
               { ref: navNotificationsRef, title: 'Notificações', content: 'Veja alertas e históricos importantes.', placement: 'top' },
               { ref: navProfileRef, title: 'Perfil', content: 'Acesse dados da sua conta.', placement: 'top' },
             ].filter(s => s.ref && s.ref.current)
