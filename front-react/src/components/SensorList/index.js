@@ -26,6 +26,11 @@ export default function SensorList({ sensores = [], onEdit, onDelete, useOrigina
             const base64String = arrayBufferToBase64(sensor.foto_sensor.data);
             fotoUrl = `data:image/jpeg;base64,${base64String}`;
           }
+             // Determinar label do tipo do sensor sem exibir raw ObjectId
+             const isObjectIdString = (v) => typeof v === 'string' && /^[0-9a-fA-F]{24}$/.test(v);
+             const tipoLabel = (typeof sensor.id_tipo_sensor === 'object')
+               ? (sensor.id_tipo_sensor.descricao || sensor.id_tipo_sensor.nome || null)
+               : (typeof sensor.id_tipo_sensor === 'string' ? (isObjectIdString(sensor.id_tipo_sensor) ? null : sensor.id_tipo_sensor) : null);
           return (
             <div className={styles.sensorCard} key={sensor._id || idx}>
               <div className={styles.gradientBar} />
@@ -34,9 +39,16 @@ export default function SensorList({ sensores = [], onEdit, onDelete, useOrigina
               </div>
               <div className={styles.info}>
                 <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                  <span className={styles.nome}>{sensor.id_tipo_sensor || 'Sensor'}</span>
-                  <span style={{ color: '#888', fontSize: '0.98rem', fontWeight: 500 }}>|</span>
-                  <span className={styles.apelido}>{sensor.apelido || '-'}</span>
+                     {tipoLabel ? (
+                       <>
+                         <span className={styles.nome}>{tipoLabel}</span>
+                         <span style={{ color: '#888', fontSize: '0.98rem', fontWeight: 500 }}>|</span>
+                         <span className={styles.apelido}>{sensor.apelido || '-'}</span>
+                       </>
+                     ) : (
+                       // Se não temos label de tipo (por ex. só temos ObjectId), mostrar apenas o apelido
+                       <span className={styles.nome}>{sensor.apelido || 'Sensor'}</span>
+                     )}
                 </div>
                 <div className={styles.numero}>
                   {`#${String(useOriginalIndex && originalSensores.length > 0 

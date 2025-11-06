@@ -19,8 +19,11 @@ export default function AdminPanel() {
   const [tiposCamarao, setTiposCamarao] = useState([]);
   const [condicoesIdeais, setCondicoesIdeais] = useState([]);
   const [sensores, setSensores] = useState([]); // mantemos carregado para futuras funcionalidades
+  const [previewImage, setPreviewImage] = useState({});  // cativeiroId -> imageUrl
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const fileInputRef = useRef(null);
+  const [uploadTargetCativeiro, setUploadTargetCativeiro] = useState(null);
   const [showNewTipoModal, setShowNewTipoModal] = useState(false);
   const [showAssociarFuncionarioModal, setShowAssociarFuncionarioModal] = useState(false);
   const [funcionarioEmail, setFuncionarioEmail] = useState('');
@@ -94,26 +97,43 @@ export default function AdminPanel() {
 
   // Deriva o tipo do sensor a partir de múltiplas fontes
   const getSensorType = (sensor) => {
-    // 1) direto do objeto
-    const direct = String(sensor && sensor.id_tipo_sensor || sensor && sensor.tipo || '').toLowerCase();
-    if (direct) return direct;
-    // 2) lookup pelo id (string ou objeto)
-    const sid = typeof sensor === 'string' ? sensor : (sensor?._id || sensor?.id);
-    if (sid) {
-      const full = (sensores || []).find(x => String(x._id) === String(sid));
-      const fromLookup = String(full?.id_tipo_sensor || '').toLowerCase();
-      if (fromLookup) return fromLookup;
-      // 3) heurística pelo apelido
-      const alias = String(full?.apelido || '').toLowerCase();
-      if (alias.includes('temp')) return 'temperatura';
-      if (alias.includes('ph')) return 'ph';
-      if (alias.includes('amonia') || alias.includes('nh3')) return 'amonia';
+    // 1) Se o sensor vier populado com id_tipo_sensor como objeto, usar descricao/nome
+    try {
+      if (!sensor) return '';
+      if (typeof sensor.id_tipo_sensor === 'object' && sensor.id_tipo_sensor) {
+        const desc = sensor.id_tipo_sensor.descricao || sensor.id_tipo_sensor.nome;
+        if (desc) return String(desc).toLowerCase();
+      }
+      // 2) direto do campo (string) ou campo alternativo 'tipo'
+      const directField = sensor.id_tipo_sensor || sensor.tipo;
+      if (typeof directField === 'string' && directField.trim()) return directField.toLowerCase();
+
+      // 3) lookup pelo id (quando `sensor` é id ou objeto com _id)
+      const sid = typeof sensor === 'string' ? sensor : (sensor?._id || sensor?.id);
+      if (sid) {
+        const full = (sensores || []).find(x => String(x._id) === String(sid));
+        if (full) {
+          if (typeof full.id_tipo_sensor === 'object' && full.id_tipo_sensor) {
+            const d = full.id_tipo_sensor.descricao || full.id_tipo_sensor.nome;
+            if (d) return String(d).toLowerCase();
+          }
+          if (typeof full.id_tipo_sensor === 'string' && full.id_tipo_sensor.trim()) return full.id_tipo_sensor.toLowerCase();
+          const alias = String(full?.apelido || '').toLowerCase();
+          if (alias.includes('temp')) return 'temperatura';
+          if (alias.includes('ph')) return 'ph';
+          if (alias.includes('amonia') || alias.includes('nh3')) return 'amonia';
+        }
+      }
+
+      // 4) heurística pelo próprio apelido no objeto parcial
+      const aliasLocal = String(sensor && sensor.apelido || '').toLowerCase();
+      if (aliasLocal.includes('temp')) return 'temperatura';
+      if (aliasLocal.includes('ph')) return 'ph';
+      if (aliasLocal.includes('amonia') || aliasLocal.includes('nh3')) return 'amonia';
+    } catch (e) {
+      // se algo falhar, devolve string vazia para evitar mostrar [object Object]
+      return '';
     }
-    // 4) heurística pelo próprio apelido no objeto parcial
-    const aliasLocal = String(sensor && sensor.apelido || '').toLowerCase();
-    if (aliasLocal.includes('temp')) return 'temperatura';
-    if (aliasLocal.includes('ph')) return 'ph';
-    if (aliasLocal.includes('amonia') || aliasLocal.includes('nh3')) return 'amonia';
     return '';
   };
 
@@ -460,10 +480,14 @@ export default function AdminPanel() {
       );
     }
     if (action === 'editar_sensor') {
+      // Mostrar tipo e apelido do sensor quando disponível em `sensores`
+      const sensorMatch = (sensores || []).find(s => String(s._id) === String(payload?.id) || String(s.id) === String(payload?.id));
+      const tipo = sensorMatch ? (typeof sensorMatch.id_tipo_sensor === 'object' ? sensorMatch.id_tipo_sensor.descricao || sensorMatch.id_tipo_sensor.nome : sensorMatch.id_tipo_sensor) : null;
+      const apelido = sensorMatch ? (sensorMatch.apelido || '') : (payload?.apelido || 'N/A');
       return (
         <div style={{ background: '#f8fafc', padding: 12, borderRadius: 6, marginTop: 8, border: '1px solid #e2e8f0' }}>
-          <div><strong>Sensor ID:</strong> {payload?.id || 'N/A'}</div>
-          <div><strong>Novo Apelido:</strong> {payload?.apelido || 'N/A'}</div>
+          <div><strong>Sensor:</strong> {tipo ? `${tipo} | ${apelido}` : (payload?.apelido || payload?.id || 'N/A')}</div>
+          {payload?.apelido && <div><strong>Novo Apelido:</strong> {payload.apelido}</div>}
         </div>
       );
     }
@@ -566,6 +590,34 @@ export default function AdminPanel() {
     };
     await axios.patch(`${apiUrl}/cativeiros/${id}`, data, { headers: { Authorization: `Bearer ${token}` } });
     await load();
+  };
+
+  // Handlers to upload photo for a cativeiro (used by the "Alterar foto" button)
+  const handleCativeiroFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // basic validation
+    if (!file.type.startsWith('image/')) { alert('Por favor selecione uma imagem.'); e.target.value = ''; return; }
+    if (file.size > 5 * 1024 * 1024) { alert('A imagem deve ter menos de 5MB.'); e.target.value = ''; return; }
+    if (!uploadTargetCativeiro) { alert('Alvo inválido para upload.'); e.target.value = ''; return; }
+    await uploadCativeiroPhoto(uploadTargetCativeiro, file);
+    e.target.value = '';
+    setUploadTargetCativeiro(null);
+  };
+
+  const uploadCativeiroPhoto = async (cativeiroId, file) => {
+    try {
+      const token = getToken();
+      const headers = { Authorization: `Bearer ${token}` };
+      const form = new FormData();
+      form.append('foto', file);
+      await axios.post(`${apiUrl}/cativeiros/${cativeiroId}/foto`, form, { headers: { ...headers, 'Content-Type': 'multipart/form-data' } });
+      alert('Foto atualizada com sucesso!');
+      await load();
+    } catch (err) {
+      console.error('Erro ao enviar foto do cativeiro:', err);
+      alert('Falha ao atualizar foto. Veja o console para mais detalhes.');
+    }
   };
 
   const act = async (id, op) => {
@@ -699,6 +751,7 @@ export default function AdminPanel() {
 
   return (
     <div style={{ padding: 20 }}>
+      <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleCativeiroFileChange} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h2>Painel do Admin</h2>
         <button
@@ -975,50 +1028,50 @@ export default function AdminPanel() {
                             </div>
                           </div>
 
+                          {/* Foto do cativeiro */}
+                          <div style={{ marginBottom: 16 }}>
+                            <button
+                              onClick={() => { setUploadTargetCativeiro(cativeiro._id); fileInputRef.current?.click(); }}
+                              style={{
+                                padding: '8px 12px',
+                                background: '#f3f4f6',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <span>📷</span>
+                              <span>Alterar foto do cativeiro</span>
+                            </button>
+                          </div>
+
                           {/* Tipo de Camarão */}
-                          <div style={{ marginBottom: 12 }}>
-                            <label style={{ display: 'block', marginBottom: 4, fontSize: '13px', fontWeight: '600', color: '#374151' }}>
-                              Tipo de Camarão
-                            </label>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <select
-                                value={cativeiro.id_tipo_camarao?._id || cativeiro.id_tipo_camarao || ''}
-                                onChange={(e) => {
-                                  const updatedCativeiros = cativeiros.map(cat =>
-                                    cat._id === cativeiro._id ? { ...cat, id_tipo_camarao: e.target.value } : cat
-                                  );
-                                  setCativeiros(updatedCativeiros);
-                                }}
-                                style={{ 
-                                  flex: 1, 
-                                  padding: '6px 10px', 
-                                  borderRadius: 4, 
-                                  border: '1px solid #d1d5db',
-                                  fontSize: '13px',
-                                  background: '#fff'
-                                }}
-                              >
-                                <option value="">Selecione um tipo</option>
-                                {tiposCamarao.map(tipo => (
-                                  <option key={tipo._id} value={tipo._id}>{tipo.nome}</option>
-                                ))}
-                              </select>
-                              <button 
-                                onClick={() => updateCativeiroTipoCamarao(cativeiro._id, cativeiro.id_tipo_camarao)} 
-                                style={{ 
-                                  background: '#4CAF50', 
-                                  color: '#fff', 
-                                  border: 'none', 
-                                  padding: '6px 12px', 
-                                  borderRadius: 4, 
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                  fontWeight: '500'
-                                }}
-                              >
-                                Salvar
-                              </button>
-                            </div>
+                          <div style={{ marginBottom: 8 }}>
+                            <strong>Tipo de Camarão:</strong>
+                            <select
+                              value={cativeiro.id_tipo_camarao?._id || cativeiro.id_tipo_camarao || ''}
+                              onChange={(e) => {
+                                const updatedCativeiros = cativeiros.map(cat =>
+                                  cat._id === cativeiro._id ? { ...cat, id_tipo_camarao: e.target.value } : cat
+                                );
+                                setCativeiros(updatedCativeiros);
+                              }}
+                              style={{ marginLeft: 8, padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+                            >
+                              <option value="">Selecione um tipo</option>
+                              {tiposCamarao.map(tipo => (
+                                <option key={tipo._id} value={tipo._id}>{tipo.nome}</option>
+                              ))}
+                            </select>
+                            <button 
+                              onClick={() => updateCativeiroTipoCamarao(cativeiro._id, cativeiro.id_tipo_camarao)} 
+                              style={{ marginLeft: 8, background: '#4CAF50', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}
+                            >
+                              Salvar
+                            </button>
                           </div>
 
                           {/* Data de Instalação */}
@@ -1308,7 +1361,7 @@ export default function AdminPanel() {
                             )}
                             <div style={{ display: 'flex', gap: 8 }}>
                               {(() => {
-                                const tiposAtuais = new Set((cativeiro.sensores || []).map(s => String(s.id_tipo_sensor || '').toLowerCase()));
+                                const tiposAtuais = new Set((cativeiro.sensores || []).map(s => getSensorType(s)).filter(Boolean));
                                 const allHave = tiposAtuais.has('temperatura') && tiposAtuais.has('ph') && tiposAtuais.has('amonia');
                                 return (
                                   <button

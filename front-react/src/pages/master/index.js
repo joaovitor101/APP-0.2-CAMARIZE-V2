@@ -500,6 +500,10 @@ export default function MasterPanel() {
         </div>
       );
     } else if (action === 'editar_sensor') {
+      // Mostrar tipo e apelido do sensor em vez do _id
+      const sensorMatch = (sensores || []).find(s => String(s._id) === String(payload.id) || String(s.id) === String(payload.id));
+      const tipo = sensorMatch ? (typeof sensorMatch.id_tipo_sensor === 'object' ? sensorMatch.id_tipo_sensor.descricao : sensorMatch.id_tipo_sensor) : null;
+      const apelido = sensorMatch ? (sensorMatch.apelido || '') : (payload.apelido || 'N/A');
       return (
         <div style={{ 
           background: '#f8fafc', 
@@ -508,8 +512,8 @@ export default function MasterPanel() {
           marginTop: 8,
           border: '1px solid #e2e8f0'
         }}>
-          <div><strong>Sensor ID:</strong> {payload.id || 'N/A'}</div>
-          <div><strong>Novo Apelido:</strong> {payload.apelido || 'N/A'}</div>
+          <div><strong>Sensor:</strong> {tipo ? `${tipo} — ${apelido}` : (payload.id || 'N/A')}</div>
+          {payload.apelido && <div><strong>Novo Apelido:</strong> {payload.apelido}</div>}
         </div>
       );
     } else if (action === 'cadastrar_funcionario') {

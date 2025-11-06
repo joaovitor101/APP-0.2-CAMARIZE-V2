@@ -357,6 +357,8 @@ const getAllCondicoesIdeais = async (req, res) => {
 const getSensoresCativeiro = async (req, res) => {
   try {
     const { cativeiroId } = req.params;
+    // Popula id_sensor e também o id_tipo_sensor interno para que o frontend receba
+    // a descrição do tipo do sensor (TiposSensor.descricao)
     const sensores = await SensoresxCativeiros.find({ id_cativeiro: cativeiroId })
       .populate({
         path: 'id_sensor',
@@ -598,4 +600,28 @@ const getCativeirosStatus = async (req, res) => {
   }
 };
 
-export default { createCativeiro, getAllCativeiros, getAllTiposCamarao, getCativeiroById, updateCativeiro, deleteCativeiro, getAllCondicoesIdeais, getSensoresCativeiro, getCativeirosStatus }; 
+// Método específico para atualizar dados do cativeiro sem enviar resposta
+const updateCativeiroData = async (id, data) => {
+  try {
+    const result = await cativeiroService.update(id, data);
+    if (!result) {
+      throw new Error('Cativeiro não encontrado.');
+    }
+    return result;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export default { 
+  createCativeiro, 
+  getAllCativeiros, 
+  getAllTiposCamarao, 
+  getCativeiroById, 
+  updateCativeiro, 
+  updateCativeiroData,
+  deleteCativeiro, 
+  getAllCondicoesIdeais, 
+  getSensoresCativeiro, 
+  getCativeirosStatus 
+}; 

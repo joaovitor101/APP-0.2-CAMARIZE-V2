@@ -39,6 +39,17 @@ class sensorService {
 
   async create(data) {
     try {
+      // Se id_tipo_sensor vier como string, buscar ou criar o tipo
+      if (typeof data.id_tipo_sensor === 'string') {
+        const TiposSensor = (await import('../models/Tipos_sensores.js')).default;
+        const descricao = data.id_tipo_sensor.trim();
+        let tipo = await TiposSensor.findOne({ descricao });
+        if (!tipo) {
+          tipo = await TiposSensor.create({ descricao });
+        }
+        data.id_tipo_sensor = tipo._id;
+      }
+      
       const novo = new Sensores(data);
       return await novo.save();
     } catch (error) {

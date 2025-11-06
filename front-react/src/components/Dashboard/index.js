@@ -9,7 +9,7 @@ import RequestButton from '../RequestButton';
 export default function Dashboard() {
   const router = useRouter();
   const { id } = router.query;
-  
+
   const [dadosAtuais, setDadosAtuais] = useState(null);
   const [dadosSemanais, setDadosSemanais] = useState([]);
   const [nomeCativeiro, setNomeCativeiro] = useState('');
@@ -21,11 +21,11 @@ export default function Dashboard() {
   // Função para buscar dados do dashboard
   const buscarDadosDashboard = async () => {
     if (!id) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       const token = typeof window !== 'undefined' ? (sessionStorage.getItem('token') || localStorage.getItem('token')) : null;
       if (!token) {
         setError('Token não encontrado. Faça login novamente.');
@@ -40,7 +40,7 @@ export default function Dashboard() {
       setDadosAtuais(response.data.dadosAtuais);
       setDadosSemanais(response.data.dadosSemanais);
       setNomeCativeiro(response.data.cativeiro.nome);
-      
+
     } catch (err) {
       console.error('Erro ao buscar dados do dashboard:', err);
       if (err.response?.status === 401) {
@@ -75,39 +75,39 @@ export default function Dashboard() {
 
   // Dados dos sensores baseados nos dados reais
   const sensores = dadosAtuais ? [
-    { 
-      label: "Temperatura", 
-      value: formatarValor(dadosAtuais.temperatura, 1, "°C"), 
-      icon: "🌡️", 
-      desc: "Temperatura" 
+    {
+      label: "Temperatura",
+      value: formatarValor(dadosAtuais.temperatura, 1, "°C"),
+      icon: "🌡️",
+      desc: "Temperatura"
     },
-    { 
-      label: "Nível de PH", 
-      value: formatarValor(dadosAtuais.ph, 1), 
-      icon: "🧪", 
-      desc: "Nível de PH" 
+    {
+      label: "Nível de PH",
+      value: formatarValor(dadosAtuais.ph, 1),
+      icon: "🧪",
+      desc: "Nível de PH"
     },
-    { 
-      label: "Amônia total", 
-      value: formatarValor(dadosAtuais.amonia, 2, " mg/L"), 
-      icon: "⚗️", 
-      desc: "Amônia total (NH3 e NH4+)" 
+    {
+      label: "Amônia total",
+      value: formatarValor(dadosAtuais.amonia, 2, " mg/L"),
+      icon: "⚗️",
+      desc: "Amônia total (NH3 e NH4+)"
     },
-    { 
-      label: "Amônia não ionizada", 
+    {
+      label: "Amônia não ionizada",
       value: formatarValor(
-        typeof dadosAtuais.amonia === 'number' ? dadosAtuais.amonia * 0.2 : "#", 
-        2, 
+        typeof dadosAtuais.amonia === 'number' ? dadosAtuais.amonia * 0.2 : "#",
+        2,
         " mg/L"
-      ), 
-      icon: "⚗️", 
-      desc: "Amônia não ionizada (NH3)" 
+      ),
+      icon: "⚗️",
+      desc: "Amônia não ionizada (NH3)"
     },
   ] : [];
 
   // Dados para o gráfico baseados nos dados semanais
   const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-  
+
   // Função para processar dados do gráfico
   const processarDadosGrafico = (dados, valorPadrao) => {
     if (dadosSemanais.length > 0) {
@@ -118,7 +118,7 @@ export default function Dashboard() {
     }
     return [valorPadrao, valorPadrao, valorPadrao, valorPadrao, valorPadrao, valorPadrao, valorPadrao];
   };
-  
+
   const temp = processarDadosGrafico('temperatura', 26);
   const ph = processarDadosGrafico('ph', 7.5);
   const amonia = processarDadosGrafico('amonia', 0.05);
@@ -143,28 +143,28 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className={styles.container}>
-      <img src="/images/logo.svg" alt="Logo" className={styles.logo} />
-        <div style={{ 
-          background: 'white', 
-          borderRadius: '15px', 
-          padding: '40px', 
+        <img src="/images/logo.svg" alt="Logo" className={styles.logo} />
+        <div style={{
+          background: 'white',
+          borderRadius: '15px',
+          padding: '40px',
           textAlign: 'center',
           boxShadow: '0 10px 30px rgba(0, 0, 0, 0.2)',
           maxWidth: '500px',
           width: '100%'
         }}>
-          <div style={{ 
-            fontSize: '24px', 
-            fontWeight: '600', 
-            color: '#007bff', 
-            marginBottom: '15px' 
+          <div style={{
+            fontSize: '24px',
+            fontWeight: '600',
+            color: '#007bff',
+            marginBottom: '15px'
           }}>
             Carregando dados...
           </div>
-          <div style={{ 
-            fontSize: '16px', 
-            color: '#666', 
-            marginBottom: '20px' 
+          <div style={{
+            fontSize: '16px',
+            color: '#666',
+            marginBottom: '20px'
           }}>
             Buscando informações dos sensores
           </div>
@@ -238,23 +238,37 @@ export default function Dashboard() {
           <span style={{ color: "#7be6c3" }}>■ Amônia</span>
         </div>
       </div>
-      <RequestButton 
+      <button
         className={styles.relatorioBtn}
-        labelWhenAllowed="Relatório Individual Detalhado"
-        labelWhenRequest="Solicitar Relatório"
-        action="relatorio_individual"
-        payload={{ cativeiroId: id, periodo: selectedPeriodo || 'semana' }}
-        onSuccess={() => handleRelatorioClick()}
-      />
+        onClick={handleRelatorioClick}
+        style={{
+          background: 'linear-gradient(90deg, #f7b0b7 0%, #a3c7f7 100%)',
+          border: 'none',
+          padding: '12px 24px',
+          borderRadius: '8px',
+          color: '#1f2937',
+          fontWeight: '600',
+          cursor: 'pointer',
+          fontSize: '16px',
+          transition: 'all 0.3s ease',
+          width: '100%',
+          maxWidth: '300px',
+          margin: '0 auto',
+          display: 'block'
+        }}
+      >
+        Solicitar Relatório
+      </button>
       <nav className={styles.navBottom}>
         <button onClick={() => router.push('/home')}><img src="/images/home.svg" alt="Home" /></button>
         <button onClick={() => router.push('/settings')}><img src="/images/settings.svg" alt="Settings" /></button>
+        <button onClick={() => router.push('/requests')}><img src="/images/history.svg" alt="Settings" /></button>
         <button onClick={() => router.push('/notifications')}><img src="/images/bell.svg" alt="Notificações" /></button>
         <button onClick={() => router.push('/profile')}><img src="/images/user.svg" alt="Perfil" /></button>
       </nav>
 
       {/* Modal de Relatório */}
-      <Modal 
+      <Modal
         isOpen={showRelatorioModal}
         onClose={handleCloseModal}
         title={
@@ -273,11 +287,11 @@ export default function Dashboard() {
               justifyContent: 'center'
             }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <polyline points="14,2 14,8 20,8" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="16" y1="13" x2="8" y2="13" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="16" y1="17" x2="8" y2="17" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <polyline points="10,9 9,9 8,9" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="14,2 14,8 20,8" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <line x1="16" y1="13" x2="8" y2="13" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <line x1="16" y1="17" x2="8" y2="17" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="10,9 9,9 8,9" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <span>Relatório Individual</span>
@@ -306,8 +320,7 @@ export default function Dashboard() {
           flexDirection: 'column',
           gap: '12px'
         }}>
-          <button 
-            onClick={() => handlePeriodoSelect('dia')}
+          <RequestButton
             style={{
               padding: '16px 20px',
               borderRadius: '12px',
@@ -317,26 +330,25 @@ export default function Dashboard() {
               fontWeight: '600',
               cursor: 'pointer',
               fontSize: '16px',
-              transition: 'all 0.3s ease',
+              width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between'
             }}
-            onMouseOver={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 8px 25px rgba(247, 176, 183, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = 'none';
-            }}
+            className={styles.relatorioBtn}
+            labelWhenAllowed="Relatório Individual Detalhado"
+            labelWhenRequest="📅 Relatório Diário"
+            action="relatorio_individual"
+            payload={{ cativeiroId: id, periodo: 'dia' }}
+            onSuccess={() => handleCloseModal()}
           >
-            <span>📅 Relatório Diário</span>
-            <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimas 24h</span>
-          </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span>📅 Relatório Diário</span>
+              <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimas 24h</span>
+            </div>
+          </RequestButton>
 
-          <button 
-            onClick={() => handlePeriodoSelect('semana')}
+          <RequestButton
             style={{
               padding: '16px 20px',
               borderRadius: '12px',
@@ -346,26 +358,25 @@ export default function Dashboard() {
               fontWeight: '600',
               cursor: 'pointer',
               fontSize: '16px',
-              transition: 'all 0.3s ease',
+              width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between'
             }}
-            onMouseOver={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 8px 25px rgba(247, 176, 183, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = 'none';
-            }}
+            className={styles.relatorioBtn}
+            labelWhenAllowed="Relatório Individual Detalhado"
+            labelWhenRequest="📊 Relatório Semanal"
+            action="relatorio_individual"
+            payload={{ cativeiroId: id, periodo: 'semana' }}
+            onSuccess={() => handleCloseModal()}
           >
-            <span>📊 Relatório Semanal</span>
-            <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimos 7 dias</span>
-          </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span>📊 Relatório Semanal</span>
+              <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimos 7 dias</span>
+            </div>
+          </RequestButton>
 
-          <button 
-            onClick={() => handlePeriodoSelect('mes')}
+          <RequestButton
             style={{
               padding: '16px 20px',
               borderRadius: '12px',
@@ -375,23 +386,23 @@ export default function Dashboard() {
               fontWeight: '600',
               cursor: 'pointer',
               fontSize: '16px',
-              transition: 'all 0.3s ease',
+              width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between'
             }}
-            onMouseOver={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 8px 25px rgba(247, 176, 183, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = 'none';
-            }}
+            className={styles.relatorioBtn}
+            labelWhenAllowed="Relatório Individual Detalhado"
+            labelWhenRequest="📈 Relatório Mensal"
+            action="relatorio_individual"
+            payload={{ cativeiroId: id, periodo: 'mes' }}
+            onSuccess={() => handleCloseModal()}
           >
-            <span>📈 Relatório Mensal</span>
-            <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimos 30 dias</span>
-          </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span>📈 Relatório Mensal</span>
+              <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimos 30 dias</span>
+            </div>
+          </RequestButton>
         </div>
       </Modal>
     </div>

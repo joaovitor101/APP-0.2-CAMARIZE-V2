@@ -25,6 +25,15 @@ export default function SensoresPage() {
   const usuarioRaw = typeof window !== 'undefined' ? (sessionStorage.getItem('usuarioCamarize') || localStorage.getItem('usuarioCamarize')) : null;
   const role = usuarioRaw ? (JSON.parse(usuarioRaw)?.role || 'membro') : 'membro';
 
+  // Helper: normaliza id_tipo_sensor para string segura (usa descricao/nome quando for objeto)
+  const sensorTipoToString = (sensor) => {
+    if (!sensor) return '';
+    const v = sensor.id_tipo_sensor || sensor.tipo || '';
+    if (!v) return '';
+    if (typeof v === 'object') return String(v.descricao || v.nome || '');
+    return String(v || '');
+  };
+
   const showNotification = (message, type = 'success', actionLabel = null, onAction = null) => {
     setNotification({ show: true, message, type, actionLabel, onAction });
   };
@@ -93,8 +102,8 @@ export default function SensoresPage() {
       // Se já está ordenado, voltar à ordem original
       const sensoresOriginais = sensores.filter(sensor => 
         filtroAtivo === '' || 
-        sensor.id_tipo_sensor?.toLowerCase().includes(filtroAtivo.toLowerCase()) ||
-        sensor.apelido?.toLowerCase().includes(filtroAtivo.toLowerCase())
+        sensorTipoToString(sensor).toLowerCase().includes(filtroAtivo.toLowerCase()) ||
+        (sensor.apelido || '').toLowerCase().includes(filtroAtivo.toLowerCase())
       );
       setSensoresFiltrados(sensoresOriginais);
       setOrdenacaoAtiva(false);
@@ -112,8 +121,8 @@ export default function SensoresPage() {
       setSensoresFiltrados(sensores);
     } else {
       const filtrados = sensores.filter(sensor => 
-        sensor.id_tipo_sensor?.toLowerCase().includes(filtroAtivo.toLowerCase()) ||
-        sensor.apelido?.toLowerCase().includes(filtroAtivo.toLowerCase())
+        sensorTipoToString(sensor).toLowerCase().includes(filtroAtivo.toLowerCase()) ||
+        (sensor.apelido || '').toLowerCase().includes(filtroAtivo.toLowerCase())
       );
       setSensoresFiltrados(filtrados);
     }
