@@ -143,20 +143,51 @@ export default function SensoresPage() {
         const sensoresLists = await Promise.all(
           cativeiros.map(async (c) => {
             try {
-              const rel = await axios.get(`${apiUrl}/cativeiros/${c._id}/sensores`);
+              const rel = await axios.get(`${apiUrl}/cativeiros/${c._id}/sensores`, { headers: { Authorization: `Bearer ${token}` } });
               const list = Array.isArray(rel.data) ? rel.data : [];
               // normalizar estrutura: alguns retornos podem vir com populate
               return list.map(r => {
                 const s = r.id_sensor || r;
+                // Se não houver sensor, pular
+                if (!s || !s._id) {
+                  return null;
+                }
+                // Extrair o tipo de sensor corretamente
+                let tipoSensor = 'sensor';
+                if (s.id_tipo_sensor) {
+                  // Se for objeto populado com descricao
+                  if (typeof s.id_tipo_sensor === 'object' && s.id_tipo_sensor !== null && s.id_tipo_sensor.descricao) {
+                    tipoSensor = s.id_tipo_sensor.descricao;
+                  } 
+                  // Se for string (descricao direta)
+                  else if (typeof s.id_tipo_sensor === 'string') {
+                    tipoSensor = s.id_tipo_sensor;
+                  }
+                  // Se for apenas ID, tentar usar heurística do apelido
+                  else if (s.apelido) {
+                    const apelidoLower = String(s.apelido).toLowerCase();
+                    if (apelidoLower.includes('temp')) tipoSensor = 'temperatura';
+                    else if (apelidoLower.includes('ph')) tipoSensor = 'pH';
+                    else if (apelidoLower.includes('amonia') || apelidoLower.includes('nh3')) tipoSensor = 'amônia';
+                  }
+                }
+                // Fallback: heurística pelo apelido se id_tipo_sensor não existir
+                else if (s.apelido) {
+                  const apelidoLower = String(s.apelido).toLowerCase();
+                  if (apelidoLower.includes('temp')) tipoSensor = 'temperatura';
+                  else if (apelidoLower.includes('ph')) tipoSensor = 'pH';
+                  else if (apelidoLower.includes('amonia') || apelidoLower.includes('nh3')) tipoSensor = 'amônia';
+                }
                 return {
                   _id: s._id || s.id || `${c._id}-${Math.random()}`,
-                  id_tipo_sensor: s.id_tipo_sensor || s.tipo || 'sensor',
+                  id_tipo_sensor: tipoSensor,
                   apelido: s.apelido || '',
                   cativeiroId: c._id,
                   cativeiroNome: c.nome || c._id
                 };
-              });
-            } catch {
+              }).filter(Boolean); // Remove nulls
+            } catch (err) {
+              console.error(`Erro ao buscar sensores do cativeiro ${c._id}:`, err);
               return [];
             }
           })

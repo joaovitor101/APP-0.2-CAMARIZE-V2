@@ -22,6 +22,9 @@ export default function AdminPanel() {
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showNewTipoModal, setShowNewTipoModal] = useState(false);
+  const [showAssociarFuncionarioModal, setShowAssociarFuncionarioModal] = useState(false);
+  const [funcionarioEmail, setFuncionarioEmail] = useState('');
+  const [associarFuncionarioLoading, setAssociarFuncionarioLoading] = useState(false);
   const [newTipoNome, setNewTipoNome] = useState('');
   const [swapForm, setSwapForm] = useState({ cativeiroId: '', temperatura: false, ph: false, amonia: false });
   const [linkForm, setLinkForm] = useState({ cativeiroId: '', temperatura: false, ph: false, amonia: false, allowed: { temperatura: true, ph: true, amonia: true } });
@@ -66,7 +69,15 @@ export default function AdminPanel() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   // Dietas por cativeiro (cache simples)
   const [cativeiroDieta, setCativeiroDieta] = useState({}); // id -> { descricao }
-  const [newDietaForm, setNewDietaForm] = useState({ descricao: '', quantidade: '' });
+  const [showDietaModal, setShowDietaModal] = useState(false);
+  const [dietaModalCativeiroId, setDietaModalCativeiroId] = useState(null);
+  const [dietaForm, setDietaForm] = useState({
+    quantidadeRefeicoes: 1,
+    modoHorario: 'automatico', // 'automatico' ou 'manual'
+    horariosManuais: [''],
+    quantidade: '',
+    descricao: ''
+  });
   const isMaster = (user?.role || (typeof window !== 'undefined' ? (JSON.parse(sessionStorage.getItem('usuarioCamarize') || localStorage.getItem('usuarioCamarize') || '{}')?.role) : '')) === 'master';
   const [newCativeiro, setNewCativeiro] = useState({
     fazendaId: '',
@@ -323,23 +334,63 @@ export default function AdminPanel() {
     }
   };
 
+  const calcularHorariosAutomaticos = (numRefeicoes) => {
+    if (numRefeicoes < 1 || numRefeicoes > 6) return [];
+    const intervalo = 24 / numRefeicoes;
+    const horarios = [];
+    for (let i = 0; i < numRefeicoes; i++) {
+      const horasTotal = i * intervalo;
+      const horas = Math.floor(horasTotal);
+      const minutos = Math.round((horasTotal - horas) * 60);
+      const horasStr = String(horas % 24).padStart(2, '0');
+      const minutosStr = String(minutos % 60).padStart(2, '0');
+      horarios.push(`${horasStr}:${minutosStr}`);
+    }
+    return horarios;
+  };
+
   const upsertDietaForCativeiro = async (cativeiroId) => {
     try {
       const token = getToken();
       const headers = { Authorization: `Bearer ${token}` };
-      const atual = cativeiroDieta[cativeiroId];
-      if (atual && atual.dietaId) {
-        await axios.put(`${apiUrl}/dietas/${atual.dietaId}`, { descricao: newDietaForm.descricao, quantidade: newDietaForm.quantidade }, { headers });
+      
+      if (!dietaForm.quantidade || String(dietaForm.quantidade).trim() === '') {
+        alert('Quantidade de ração em gramas é obrigatória.');
+        return;
+      }
+
+      let horarios = [];
+      if (dietaForm.modoHorario === 'automatico') {
+        horarios = calcularHorariosAutomaticos(dietaForm.quantidadeRefeicoes);
       } else {
-        const d = await axios.post(`${apiUrl}/dietas`, { descricao: newDietaForm.descricao, quantidade: newDietaForm.quantidade }, { headers });
+        horarios = dietaForm.horariosManuais.filter(h => h && h.trim());
+      }
+
+      if (horarios.length === 0) {
+        alert('É necessário definir pelo menos um horário de alimentação.');
+        return;
+      }
+
+      const atual = cativeiroDieta[cativeiroId];
+      const dietaData = {
+        descricao: dietaForm.descricao || '',
+        quantidade: Number(dietaForm.quantidade),
+        horarios: horarios,
+        quantidadeRefeicoes: dietaForm.quantidadeRefeicoes
+      };
+
+      if (atual && atual.dietaId) {
+        await axios.put(`${apiUrl}/dietas/${atual.dietaId}`, dietaData, { headers });
+      } else {
+        const d = await axios.post(`${apiUrl}/dietas`, dietaData, { headers });
         const dietaId = d?.data?._id;
         if (!dietaId) throw new Error('Falha ao criar dieta');
         await axios.post(`${apiUrl}/dietas/assign/${cativeiroId}`, { dietaId, ativo: true }, { headers });
       }
+      
       // Recarrega dieta atual
       await loadDietaAtual(cativeiroId);
-      // Limpa form
-      setNewDietaForm({ descricao: '', quantidade: '' });
+      setShowDietaModal(false);
       alert('Dieta atualizada com sucesso.');
     } catch (e) {
       alert('Erro ao criar/atribuir dieta: ' + (e?.response?.data?.error || e.message));
@@ -569,6 +620,34 @@ export default function AdminPanel() {
     }
   };
 
+  const associarFuncionarioDiretamente = async () => {
+    if (!funcionarioEmail || !funcionarioEmail.trim()) {
+      alert('Por favor, informe o email do funcionário.');
+      return;
+    }
+
+    try {
+      setAssociarFuncionarioLoading(true);
+      const token = getToken();
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Associar funcionário diretamente à fazenda do admin
+      const response = await axios.post(`${apiUrl}/users/associar-funcionario`, {
+        email: funcionarioEmail.trim()
+      }, { headers });
+
+      alert(response.data.message || 'Funcionário associado com sucesso à sua fazenda!');
+      setShowAssociarFuncionarioModal(false);
+      setFuncionarioEmail('');
+      await load();
+    } catch (e) {
+      const errorMsg = e?.response?.data?.error || e.message || 'Erro desconhecido';
+      alert('Erro ao associar funcionário: ' + errorMsg);
+    } finally {
+      setAssociarFuncionarioLoading(false);
+    }
+  };
+
   const solicitarCriacaoCativeiro = async () => {
     try {
       const token = getToken();
@@ -581,8 +660,7 @@ export default function AdminPanel() {
         data_instalacao: newCativeiro.data_instalacao,
         temp_media_diaria: newCativeiro.temp_media_diaria,
         ph_medio_diario: newCativeiro.ph_medio_diario,
-        amonia_media_diaria: newCativeiro.amonia_media_diaria,
-        dieta_texto: newDietaForm.descricao || undefined
+        amonia_media_diaria: newCativeiro.amonia_media_diaria
       };
 
       await axios.post(`${apiUrl}/requests`, {
@@ -645,7 +723,26 @@ export default function AdminPanel() {
 
       {tab === 'requests' && (
         <section>
-          <h3>Histórico de Requests dos Funcionários</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3>Histórico de Requests dos Funcionários</h3>
+            <button
+              onClick={() => {
+                setFuncionarioEmail('');
+                setShowAssociarFuncionarioModal(true);
+              }}
+              style={{
+                background: '#10b981',
+                color: '#fff',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Associar Funcionário à Fazenda
+            </button>
+          </div>
           <div style={{
             display: 'flex', gap: 12, marginBottom: 16, padding: 12, background: '#f9fafb', borderRadius: 8, alignItems: 'center', flexWrap: 'wrap'
           }}>
@@ -769,20 +866,36 @@ export default function AdminPanel() {
         <section>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3>Fazendas e Cativeiros</h3>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              style={{
-                background: '#3b82f6',
-                color: '#fff',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              Solicitar novo cativeiro
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setShowAssociarFuncionarioModal(true)}
+                style={{
+                  background: '#10b981',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Associar Funcionário
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                style={{
+                  background: '#3b82f6',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Solicitar novo cativeiro
+              </button>
+            </div>
           </div>
           {Object.entries(groupedByFazenda()).map(([fzId, cats]) => (
             <div key={fzId} style={{ border: '1px solid #eee', borderRadius: 8, marginBottom: 10 }}>
@@ -817,65 +930,227 @@ export default function AdminPanel() {
                         <span>{expandedCativeiro[cativeiro._id] ? '▲' : '▼'}</span>
                       </div>
                       {expandedCativeiro[cativeiro._id] && (
-                        <div style={{ padding: 10 }}>
-                          <div style={{ marginBottom: 8 }}>
-                            <strong>Tipo de Camarão:</strong>
-                            <select
-                              value={cativeiro.id_tipo_camarao?._id || cativeiro.id_tipo_camarao || ''}
-                              onChange={(e) => {
-                                const updatedCativeiros = cativeiros.map(cat =>
-                                  cat._id === cativeiro._id ? { ...cat, id_tipo_camarao: e.target.value } : cat
-                                );
-                                setCativeiros(updatedCativeiros);
-                              }}
-                              style={{ marginLeft: 8, padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
-                            >
-                              <option value="">Selecione um tipo</option>
-                              {tiposCamarao.map(tipo => (
-                                <option key={tipo._id} value={tipo._id}>{tipo.nome}</option>
-                              ))}
-                            </select>
-                            <button 
-                              onClick={() => updateCativeiroTipoCamarao(cativeiro._id, cativeiro.id_tipo_camarao)} 
-                              style={{ marginLeft: 8, background: '#4CAF50', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}
-                            >
-                              Salvar
-                            </button>
+                        <div style={{ padding: '12px' }}>
+                          {/* Nome do Cativeiro */}
+                          <div style={{ marginBottom: 12 }}>
+                            <label style={{ display: 'block', marginBottom: 4, fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                              Nome do Cativeiro
+                            </label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <input
+                                type="text"
+                                value={cativeiro.nome}
+                                onChange={(e) => {
+                                  const updatedCativeiros = cativeiros.map(cat =>
+                                    cat._id === cativeiro._id ? { ...cat, nome: e.target.value } : cat
+                                  );
+                                  setCativeiros(updatedCativeiros);
+                                }}
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '6px 10px', 
+                                  borderRadius: 4, 
+                                  border: '1px solid #d1d5db',
+                                  fontSize: '13px'
+                                }}
+                              />
+                              <button 
+                                onClick={() => updateCativeiroNome(cativeiro._id, cativeiro.nome)} 
+                                style={{ 
+                                  background: '#4CAF50', 
+                                  color: '#fff', 
+                                  border: 'none', 
+                                  padding: '6px 12px', 
+                                  borderRadius: 4, 
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '500'
+                                }}
+                              >
+                                Salvar
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ marginBottom: 8 }}>
-                            <strong>Data de Instalação:</strong> {new Date(cativeiro.data_instalacao).toLocaleDateString()}
+
+                          {/* Tipo de Camarão */}
+                          <div style={{ marginBottom: 12 }}>
+                            <label style={{ display: 'block', marginBottom: 4, fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                              Tipo de Camarão
+                            </label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <select
+                                value={cativeiro.id_tipo_camarao?._id || cativeiro.id_tipo_camarao || ''}
+                                onChange={(e) => {
+                                  const updatedCativeiros = cativeiros.map(cat =>
+                                    cat._id === cativeiro._id ? { ...cat, id_tipo_camarao: e.target.value } : cat
+                                  );
+                                  setCativeiros(updatedCativeiros);
+                                }}
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '6px 10px', 
+                                  borderRadius: 4, 
+                                  border: '1px solid #d1d5db',
+                                  fontSize: '13px',
+                                  background: '#fff'
+                                }}
+                              >
+                                <option value="">Selecione um tipo</option>
+                                {tiposCamarao.map(tipo => (
+                                  <option key={tipo._id} value={tipo._id}>{tipo.nome}</option>
+                                ))}
+                              </select>
+                              <button 
+                                onClick={() => updateCativeiroTipoCamarao(cativeiro._id, cativeiro.id_tipo_camarao)} 
+                                style={{ 
+                                  background: '#4CAF50', 
+                                  color: '#fff', 
+                                  border: 'none', 
+                                  padding: '6px 12px', 
+                                  borderRadius: 4, 
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '500'
+                                }}
+                              >
+                                Salvar
+                              </button>
+                            </div>
                           </div>
-                          <div style={{ marginBottom: 8 }}>
-                            <strong>Dieta atual:</strong>
-                            <div style={{ marginTop: 4, padding: 8, border: '1px dashed #e5e7eb', borderRadius: 6, background: '#fafafa' }}>
+
+                          {/* Data de Instalação */}
+                          <div style={{ marginBottom: 12 }}>
+                            <label style={{ display: 'block', marginBottom: 4, fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                              Data de Instalação
+                            </label>
+                            <div style={{ 
+                              padding: '6px 10px', 
+                              borderRadius: 4, 
+                              border: '1px solid #e5e7eb',
+                              background: '#f9fafb',
+                              color: '#6b7280',
+                              fontSize: '13px'
+                            }}>
+                              {new Date(cativeiro.data_instalacao).toLocaleDateString('pt-BR')}
+                            </div>
+                          </div>
+
+                          {/* Dieta atual */}
+                          <div style={{ marginBottom: 12 }}>
+                            <label style={{ display: 'block', marginBottom: 4, fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                              Dieta Atual
+                            </label>
+                            <div style={{ 
+                              marginBottom: 8, 
+                              padding: 10, 
+                              border: '1px solid #e5e7eb', 
+                              borderRadius: 6, 
+                              background: '#fafafa' 
+                            }}>
                               {cativeiroDieta[cativeiro._id] === undefined && (
-                                <span style={{ color: '#6b7280' }}>Carregando...</span>
+                                <div style={{ color: '#6b7280', fontSize: '12px' }}>Carregando...</div>
                               )}
                               {cativeiroDieta[cativeiro._id] === null && (
-                                <span style={{ color: '#6b7280' }}>Nenhuma dieta ativa.</span>
+                                <div style={{ color: '#6b7280', fontSize: '12px' }}>Nenhuma dieta ativa.</div>
                               )}
                               {cativeiroDieta[cativeiro._id] && (
-                                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                                  <div><b>Descrição:</b> {cativeiroDieta[cativeiro._id].descricao || '—'}</div>
-                                  <div><b>Qtd (g):</b> {typeof cativeiroDieta[cativeiro._id].quantidade !== 'undefined' ? cativeiroDieta[cativeiro._id].quantidade : '—'}</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    <div>
+                                      <span style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: 2 }}>Descrição</span>
+                                      <span style={{ fontSize: '12px', fontWeight: '500', color: '#111827' }}>
+                                        {cativeiroDieta[cativeiro._id].descricao || '—'}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: 2 }}>Qtd (g)</span>
+                                      <span style={{ fontSize: '12px', fontWeight: '500', color: '#111827' }}>
+                                        {typeof cativeiroDieta[cativeiro._id].quantidade !== 'undefined' ? cativeiroDieta[cativeiro._id].quantidade : '—'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {cativeiroDieta[cativeiro._id].quantidadeRefeicoes && (
+                                    <div>
+                                      <span style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: 2 }}>Refeições/dia</span>
+                                      <span style={{ fontSize: '12px', fontWeight: '500', color: '#111827' }}>
+                                        {cativeiroDieta[cativeiro._id].quantidadeRefeicoes}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {cativeiroDieta[cativeiro._id].horarios && cativeiroDieta[cativeiro._id].horarios.length > 0 && (
+                                    <div>
+                                      <span style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: 2 }}>Horários</span>
+                                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                        {cativeiroDieta[cativeiro._id].horarios.map((h, idx) => (
+                                          <span key={idx} style={{
+                                            padding: '2px 8px',
+                                            background: '#fff',
+                                            border: '1px solid #e5e7eb',
+                                            borderRadius: 4,
+                                            fontSize: '12px',
+                                            fontWeight: '500',
+                                            color: '#374151'
+                                          }}>
+                                            {h}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
+                            <button
+                              onClick={() => {
+                                const dietaAtual = cativeiroDieta[cativeiro._id];
+                                if (dietaAtual) {
+                                  const horarios = dietaAtual.horarios || [];
+                                  const qtdRefeicoes = dietaAtual.quantidadeRefeicoes || (horarios.length > 0 ? horarios.length : 1);
+                                  setDietaForm({
+                                    quantidadeRefeicoes: qtdRefeicoes,
+                                    modoHorario: horarios.length > 0 ? 'manual' : 'automatico',
+                                    horariosManuais: horarios.length > 0 ? horarios : Array(qtdRefeicoes).fill(''),
+                                    quantidade: dietaAtual.quantidade || '',
+                                    descricao: dietaAtual.descricao || ''
+                                  });
+                                } else {
+                                  setDietaForm({
+                                    quantidadeRefeicoes: 1,
+                                    modoHorario: 'automatico',
+                                    horariosManuais: [''],
+                                    quantidade: '',
+                                    descricao: ''
+                                  });
+                                }
+                                setDietaModalCativeiroId(cativeiro._id);
+                                setShowDietaModal(true);
+                              }}
+                              style={{
+                                width: '100%',
+                                background: '#3b82f6',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '6px 12px',
+                                borderRadius: 4,
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: '500'
+                              }}
+                            >
+                              Gerenciar Dieta
+                            </button>
                           </div>
-                          <div style={{ marginBottom: 8 }}>
-                            <strong>Atualizar Dieta</strong>
-                            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                              <input value={newDietaForm.descricao} onChange={(e) => setNewDietaForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Descrição" style={{ flex: 1, minWidth: 220, padding: '6px 8px', border: '1px solid #ddd', borderRadius: 6 }} />
-                              <input type="number" step="0.01" value={newDietaForm.quantidade} onChange={(e) => setNewDietaForm(f => ({ ...f, quantidade: e.target.value }))} placeholder="Quantidade (g)" style={{ width: 160, padding: '6px 8px', border: '1px solid #ddd', borderRadius: 6 }} />
-                              <button onClick={() => upsertDietaForCativeiro(cativeiro._id)} style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 6, cursor: 'pointer' }}>Atualizar</button>
-                            </div>
-                          </div>
-                          {/* Dieta removida do card: administrar via Dietas + DietasxCativeiros */}
-                          <div style={{ marginBottom: 8 }}>
-                            <strong>Condições Ideais:</strong>
-                            <div style={{ marginTop: 4, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+
+                          {/* Condições Ideais */}
+                          <div style={{ marginBottom: 12 }}>
+                            <label style={{ display: 'block', marginBottom: 6, fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                              Condições Ideais
+                            </label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                               <div>
-                                <label style={{ fontSize: '12px', color: '#666' }}>Temperatura (°C):</label>
+                                <label style={{ display: 'block', marginBottom: 4, fontSize: '12px', color: '#6b7280' }}>
+                                  Temp (°C)
+                                </label>
                                 <input
                                   type="number"
                                   step="0.1"
@@ -892,11 +1167,19 @@ export default function AdminPanel() {
                                     );
                                     setCativeiros(updatedCativeiros);
                                   }}
-                                  style={{ width: '80px', padding: '4px 6px', borderRadius: 4, border: '1px solid #ccc', marginLeft: 4 }}
+                                  style={{ 
+                                    width: '100%', 
+                                    padding: '6px 10px', 
+                                    borderRadius: 4, 
+                                    border: '1px solid #d1d5db',
+                                    fontSize: '13px'
+                                  }}
                                 />
                               </div>
                               <div>
-                                <label style={{ fontSize: '12px', color: '#666' }}>pH:</label>
+                                <label style={{ display: 'block', marginBottom: 4, fontSize: '12px', color: '#6b7280' }}>
+                                  pH
+                                </label>
                                 <input
                                   type="number"
                                   step="0.1"
@@ -913,11 +1196,19 @@ export default function AdminPanel() {
                                     );
                                     setCativeiros(updatedCativeiros);
                                   }}
-                                  style={{ width: '60px', padding: '4px 6px', borderRadius: 4, border: '1px solid #ccc', marginLeft: 4 }}
+                                  style={{ 
+                                    width: '100%', 
+                                    padding: '6px 10px', 
+                                    borderRadius: 4, 
+                                    border: '1px solid #d1d5db',
+                                    fontSize: '13px'
+                                  }}
                                 />
                               </div>
                               <div>
-                                <label style={{ fontSize: '12px', color: '#666' }}>Amônia (mg/L):</label>
+                                <label style={{ display: 'block', marginBottom: 4, fontSize: '12px', color: '#6b7280' }}>
+                                  Amônia (mg/L)
+                                </label>
                                 <input
                                   type="number"
                                   step="0.01"
@@ -934,49 +1225,85 @@ export default function AdminPanel() {
                                     );
                                     setCativeiros(updatedCativeiros);
                                   }}
-                                  style={{ width: '80px', padding: '4px 6px', borderRadius: 4, border: '1px solid #ccc', marginLeft: 4 }}
+                                  style={{ 
+                                    width: '100%', 
+                                    padding: '6px 10px', 
+                                    borderRadius: 4, 
+                                    border: '1px solid #d1d5db',
+                                    fontSize: '13px'
+                                  }}
                                 />
                               </div>
-                              <button 
-                                onClick={() => updateCativeiroCondicoesIdeais(cativeiro._id, cativeiro.condicoes_ideais)} 
-                                style={{ background: '#4CAF50', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: 4, cursor: 'pointer' }}
-                              >
-                                Salvar
-                              </button>
                             </div>
+                            <button 
+                              onClick={() => updateCativeiroCondicoesIdeais(cativeiro._id, cativeiro.condicoes_ideais)} 
+                              style={{ 
+                                marginTop: 8,
+                                width: '100%',
+                                background: '#4CAF50', 
+                                color: '#fff', 
+                                border: 'none', 
+                                padding: '6px 12px', 
+                                borderRadius: 4, 
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                fontWeight: '500'
+                              }}
+                            >
+                              Salvar Condições
+                            </button>
                           </div>
-                          <div style={{ marginTop: 10 }}>
-                            <div style={{ fontWeight: 700, marginBottom: 6 }}>Sensores</div>
+
+                          {/* Sensores */}
+                          <div style={{ marginBottom: 12 }}>
+                            <label style={{ display: 'block', marginBottom: 6, fontSize: '13px', fontWeight: '600', color: '#374151' }}>
+                              Sensores
+                            </label>
                             {Array.isArray(cativeiro.sensores) && cativeiro.sensores.length > 0 ? (
-                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <div style={{ 
+                                marginBottom: 10,
+                                display: 'flex', 
+                                gap: 6, 
+                                flexWrap: 'wrap' 
+                              }}>
                                 {cativeiro.sensores.map(s => (
                                   <div key={s._id || s} style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: 6,
-                                    padding: '6px 10px',
+                                    padding: '4px 8px',
                                     border: '1px solid #e5e7eb',
-                                    borderRadius: 999,
+                                    borderRadius: 6,
                                     background: '#f9fafb',
                                     fontSize: 12,
                                     color: '#374151'
                                   }}>
                                     <span style={{
                                       padding: '2px 6px',
-                                      borderRadius: 6,
+                                      borderRadius: 4,
                                       background: '#eef2ff',
                                       color: '#3730a3',
                                       fontWeight: 600,
-                                      textTransform: 'uppercase'
+                                      textTransform: 'uppercase',
+                                      fontSize: '10px'
                                     }}>{getSensorType(s) || 'sensor'}</span>
-                                    <span style={{ fontWeight: 600 }}>{s.apelido || '—'}</span>
+                                    <span style={{ fontWeight: 500 }}>{s.apelido || '—'}</span>
                                   </div>
                                 ))}
                               </div>
                             ) : (
-                              <div style={{ color: '#6b7280' }}>Nenhum sensor associado.</div>
+                              <div style={{ 
+                                marginBottom: 10,
+                                padding: 8,
+                                background: '#f9fafb',
+                                borderRadius: 4,
+                                color: '#6b7280',
+                                fontSize: '12px'
+                              }}>
+                                Nenhum sensor associado.
+                              </div>
                             )}
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                            <div style={{ display: 'flex', gap: 8 }}>
                               {(() => {
                                 const tiposAtuais = new Set((cativeiro.sensores || []).map(s => String(s.id_tipo_sensor || '').toLowerCase()));
                                 const allHave = tiposAtuais.has('temperatura') && tiposAtuais.has('ph') && tiposAtuais.has('amonia');
@@ -985,33 +1312,39 @@ export default function AdminPanel() {
                                     onClick={() => solicitarVinculoSensores(cativeiro)}
                                     disabled={allHave}
                                     title={allHave ? 'Já possui sensores de temperatura, pH e amônia' : 'Solicitar vínculo de sensores que faltam'}
-                                    style={{ background: allHave ? '#9ca3af' : '#3b82f6', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 4, cursor: allHave ? 'not-allowed' : 'pointer' }}
+                                    style={{ 
+                                      flex: 1,
+                                      background: allHave ? '#9ca3af' : '#3b82f6', 
+                                      color: '#fff', 
+                                      border: 'none', 
+                                      padding: '6px 12px', 
+                                      borderRadius: 4, 
+                                      cursor: allHave ? 'not-allowed' : 'pointer',
+                                      fontSize: '13px',
+                                      fontWeight: '500'
+                                    }}
                                   >
-                                    Solicitar vínculo
+                                    Solicitar Vínculo
                                   </button>
                                 );
                               })()}
                               <button
                                 onClick={() => abrirSwapModal(cativeiro._id)}
-                                style={{ background: '#111827', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 4, cursor: 'pointer' }}
+                                style={{ 
+                                  flex: 1,
+                                  background: '#111827', 
+                                  color: '#fff', 
+                                  border: 'none', 
+                                  padding: '6px 12px', 
+                                  borderRadius: 4, 
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '500'
+                                }}
                               >
-                                Solicitar troca
+                                Solicitar Troca
                               </button>
                             </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                            <input
-                              type="text"
-                              value={cativeiro.nome}
-                              onChange={(e) => {
-                                const updatedCativeiros = cativeiros.map(cat =>
-                                  cat._id === cativeiro._id ? { ...cat, nome: e.target.value } : cat
-                                );
-                                setCativeiros(updatedCativeiros);
-                              }}
-                              style={{ flex: 1, padding: '6px 10px', borderRadius: 4, border: '1px solid #ccc' }}
-                            />
-                            <button onClick={() => updateCativeiroNome(cativeiro._id, cativeiro.nome)} style={{ background: '#4CAF50', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 4, cursor: 'pointer' }}>Salvar</button>
                           </div>
                         </div>
                       )}
@@ -1376,6 +1709,253 @@ export default function AdminPanel() {
               style={{ padding: '8px 16px', background: newTipoNome.trim() ? '#10b981' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 6, cursor: newTipoNome.trim() ? 'pointer' : 'not-allowed' }}
             >
               Salvar
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Dieta */}
+      {showDietaModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: '#fff',
+            padding: 24,
+            borderRadius: 8,
+            width: '95%',
+            maxWidth: 600,
+            maxHeight: '90vh',
+            overflow: 'auto',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.1)'
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: 20 }}>Configurar Dieta</h3>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Quantidade de refeições */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                  Quantidade de refeições por dia (1 a 6):
+                </label>
+                <select
+                  value={dietaForm.quantidadeRefeicoes}
+                  onChange={(e) => {
+                    const num = Number(e.target.value);
+                    setDietaForm(prev => ({
+                      ...prev,
+                      quantidadeRefeicoes: num,
+                      horariosManuais: prev.modoHorario === 'manual' ? Array(num).fill('').map((_, i) => prev.horariosManuais[i] || '') : prev.horariosManuais
+                    }));
+                  }}
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: '14px' }}
+                >
+                  {[1, 2, 3, 4, 5, 6].map(num => (
+                    <option key={num} value={num}>{num}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Modo de horário */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                  Modo de definição de horários:
+                </label>
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      checked={dietaForm.modoHorario === 'automatico'}
+                      onChange={() => setDietaForm(prev => ({ ...prev, modoHorario: 'automatico' }))}
+                    />
+                    <span>Automático (dividir 24h igualmente)</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      checked={dietaForm.modoHorario === 'manual'}
+                      onChange={() => setDietaForm(prev => ({ ...prev, modoHorario: 'manual' }))}
+                    />
+                    <span>Manual</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Horários automáticos (preview) */}
+              {dietaForm.modoHorario === 'automatico' && (
+                <div style={{ padding: 12, background: '#f3f4f6', borderRadius: 6 }}>
+                  <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: 8 }}>
+                    Horários calculados automaticamente:
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {calcularHorariosAutomaticos(dietaForm.quantidadeRefeicoes).map((horario, idx) => (
+                      <span key={idx} style={{
+                        padding: '6px 12px',
+                        background: '#fff',
+                        border: '1px solid #d1d5db',
+                        borderRadius: 6,
+                        fontSize: '14px',
+                        fontWeight: '500'
+                      }}>
+                        {horario}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Horários manuais */}
+              {dietaForm.modoHorario === 'manual' && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: 6, fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                    Horários de alimentação:
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {Array.from({ length: dietaForm.quantidadeRefeicoes }).map((_, idx) => (
+                      <input
+                        key={idx}
+                        type="time"
+                        value={dietaForm.horariosManuais[idx] || ''}
+                        onChange={(e) => {
+                          const novosHorarios = [...dietaForm.horariosManuais];
+                          novosHorarios[idx] = e.target.value;
+                          setDietaForm(prev => ({ ...prev, horariosManuais: novosHorarios }));
+                        }}
+                        style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: '14px' }}
+                        placeholder={`Refeição ${idx + 1}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Quantidade de ração */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                  Quantidade de ração (gramas): <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={dietaForm.quantidade}
+                  onChange={(e) => setDietaForm(prev => ({ ...prev, quantidade: e.target.value }))}
+                  placeholder="Ex: 100"
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: '14px' }}
+                  required
+                />
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+                  Descrição (opcional):
+                </label>
+                <input
+                  type="text"
+                  value={dietaForm.descricao}
+                  onChange={(e) => setDietaForm(prev => ({ ...prev, descricao: e.target.value }))}
+                  placeholder="Ex: Ração premium para camarões"
+                  style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: '14px' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 24, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowDietaModal(false);
+                  setDietaModalCativeiroId(null);
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#6b7280',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => dietaModalCativeiroId && upsertDietaForCativeiro(dietaModalCativeiroId)}
+                disabled={!dietaForm.quantidade || String(dietaForm.quantidade).trim() === ''}
+                style={{
+                  padding: '8px 16px',
+                  background: (!dietaForm.quantidade || String(dietaForm.quantidade).trim() === '') ? '#9ca3af' : '#3b82f6',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: (!dietaForm.quantidade || String(dietaForm.quantidade).trim() === '') ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal para associar funcionário */}
+      <Modal isOpen={showAssociarFuncionarioModal} onClose={() => {
+        setShowAssociarFuncionarioModal(false);
+        setFuncionarioEmail('');
+      }} title="Associar Funcionário à Fazenda">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: '14px', fontWeight: '500', color: '#374151' }}>
+              Email do Funcionário: <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <input
+              type="email"
+              value={funcionarioEmail}
+              onChange={(e) => setFuncionarioEmail(e.target.value)}
+              placeholder="exemplo@email.com"
+              autoFocus
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: '14px' }}
+            />
+            <p style={{ fontSize: '12px', color: '#6b7280', marginTop: 4 }}>
+              Informe o email do funcionário que já está cadastrado no sistema. O funcionário será associado diretamente à sua fazenda.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 12, marginTop: 8, justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => {
+                setShowAssociarFuncionarioModal(false);
+                setFuncionarioEmail('');
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#6b7280',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer'
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={associarFuncionarioDiretamente}
+              disabled={!funcionarioEmail || !funcionarioEmail.trim() || associarFuncionarioLoading}
+              style={{
+                padding: '8px 16px',
+                background: (!funcionarioEmail || !funcionarioEmail.trim() || associarFuncionarioLoading) ? '#9ca3af' : '#10b981',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                cursor: (!funcionarioEmail || !funcionarioEmail.trim() || associarFuncionarioLoading) ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {associarFuncionarioLoading ? 'Associando...' : 'Associar Funcionário'}
             </button>
           </div>
         </div>

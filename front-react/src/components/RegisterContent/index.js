@@ -7,6 +7,7 @@ import { useRegister } from "@/context/RegisterContext";
 
 const RegisterContent = () => {
   const router = useRouter();
+  const { tipo } = router.query; // Pega o tipo da query string
   const { } = useRegister();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -58,47 +59,64 @@ const RegisterContent = () => {
     
     if (!name || !email || !password) return;
     
+    // Validar email no formato básico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError("Email inválido. Por favor, verifique o formato.");
+      return;
+    }
+    
+    // Verificar se email já existe (sem criar usuário)
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-      const response = await fetch(`${apiUrl}/users/register`, {
+      const checkResponse = await fetch(`${apiUrl}/users/check-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nome: name,
-          email,
-          senha: password,
-          foto_perfil: null
-        })
+        body: JSON.stringify({ email })
       });
-      if (response.ok) {
-        // Login automático após cadastro
-        const loginRes = await fetch(`${apiUrl}/users/auth`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, senha: password })
-        });
-        if (loginRes.ok) {
-          const loginData = await loginRes.json();
-          localStorage.setItem("token", loginData.token);
-          // Buscar o usuário pelo id do token
-          const decoded = JSON.parse(atob(loginData.token.split('.')[1]));
-          const userId = decoded.id;
-          const userRes = await fetch(`${apiUrl}/users/${userId}`);
-          const usuario = await userRes.json();
-          localStorage.setItem("usuarioCamarize", JSON.stringify(usuario));
-          // Redireciona para cadastro de fazenda
-          router.push("/register/fazenda");
-        } else {
-          setError("Erro ao fazer login automático após cadastro.");
+      
+      if (checkResponse.ok) {
+        const data = await checkResponse.json();
+        if (data.exists) {
+          setError("Este email já está cadastrado. Tente fazer login ou use outro email.");
+          return;
         }
-      } else {
-        const errorData = await response.text();
-        console.error("Erro no registro:", errorData);
-        setError(`Erro ao cadastrar usuário: ${errorData}`);
       }
     } catch (error) {
-      console.error("Erro de conexão:", error);
-      setError(`Erro de conexão com o servidor: ${error.message}`);
+      // Se der erro de rede, permitir continuar (validação acontecerá depois)
+      console.log("Erro ao verificar email:", error);
+    }
+    
+    // Salvar dados temporários e redirecionar para seleção de tipo
+    const userData = {
+      nome: name,
+      email,
+      senha: password,
+      tipoUsuario: tipo || null // Salva o tipo se vier da query string
+    };
+    
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('pendingRegistration', JSON.stringify(userData));
+      localStorage.setItem('pendingRegistration', JSON.stringify(userData));
+    }
+    
+    // Se já tem tipo selecionado, vai direto para o cadastro correspondente
+    if (tipo === 'funcionario') {
+      router.push("/register/funcionario").catch(() => {
+        window.location.href = "/register/funcionario";
+      });
+    } else if (tipo === 'proprietario') {
+      router.push("/register/proprietario").catch(() => {
+        window.location.href = "/register/proprietario";
+      });
+    } else {
+      // Se não tem tipo, vai para seleção de tipo
+      router.push("/register-type").catch(err => {
+        console.error("Erro ao redirecionar:", err);
+        setTimeout(() => {
+          window.location.href = "/register-type";
+        }, 100);
+      });
     }
   };
 

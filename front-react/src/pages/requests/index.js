@@ -170,7 +170,58 @@ export default function MyRequests() {
     );
   };
 
-  if (authLoading || loading) return <div style={{ padding: 20 }}>Carregando...</div>;
+  if (authLoading || loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20
+      }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '20px',
+          padding: '48px',
+          textAlign: 'center',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          maxWidth: '400px',
+          width: '100%'
+        }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            border: '5px solid #f3f3f3',
+            borderTop: '5px solid #667eea',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 24px'
+          }}></div>
+          <div style={{
+            fontSize: '24px',
+            fontWeight: '600',
+            color: '#333',
+            marginBottom: '12px'
+          }}>
+            Carregando solicitações...
+          </div>
+          <div style={{
+            fontSize: '15px',
+            color: '#666',
+            lineHeight: '1.5'
+          }}>
+            Estamos buscando suas solicitações
+          </div>
+          <style jsx>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      </div>
+    );
+  }
   if (!isAuthenticated) return <div style={{ padding: 20, color: 'red' }}>Sessão expirada. Faça login novamente.</div>;
   if (error) return <div style={{ padding: 20, color: 'red' }}>{error}</div>;
 

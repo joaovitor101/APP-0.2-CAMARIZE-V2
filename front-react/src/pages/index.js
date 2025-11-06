@@ -35,7 +35,7 @@ export default function StartScreen() {
           />
         </div>
         <div className={styles.waveBg}></div>
-        <button className={styles.startButton} onClick={() => router.push("/login")}>Conecte-se</button>
+        <button className={styles.startButton} onClick={() => router.push("/register-type")}>Conecte-se</button>
       </main>
     </>
   );

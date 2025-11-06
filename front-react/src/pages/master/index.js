@@ -64,6 +64,9 @@ export default function MasterPanel() {
 
   // Modal de criação de cativeiro
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showApproveFuncionarioModal, setShowApproveFuncionarioModal] = useState(false);
+  const [pendingApproveRequestId, setPendingApproveRequestId] = useState(null);
+  const [selectedFazendaId, setSelectedFazendaId] = useState('');
   const [createForm, setCreateForm] = useState({
     fazendaId: '',
     nome: '',
@@ -94,6 +97,47 @@ export default function MasterPanel() {
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
   const getToken = () => (typeof window !== 'undefined' ? (sessionStorage.getItem('token') || localStorage.getItem('token')) : null);
+
+  // Função para extrair o tipo de sensor corretamente
+  const getSensorType = (sensor) => {
+    if (!sensor) return 'sensor';
+    
+    // Se id_tipo_sensor é um objeto populado com descricao
+    if (sensor.id_tipo_sensor) {
+      if (typeof sensor.id_tipo_sensor === 'object' && sensor.id_tipo_sensor !== null) {
+        if (sensor.id_tipo_sensor.descricao) {
+          return sensor.id_tipo_sensor.descricao;
+        }
+      }
+      // Se for string (descricao direta)
+      else if (typeof sensor.id_tipo_sensor === 'string') {
+        return sensor.id_tipo_sensor;
+      }
+    }
+    
+    // Heurística pelo apelido
+    if (sensor.apelido) {
+      const apelidoLower = String(sensor.apelido).toLowerCase();
+      if (apelidoLower.includes('temp')) return 'temperatura';
+      if (apelidoLower.includes('ph')) return 'pH';
+      if (apelidoLower.includes('amonia') || apelidoLower.includes('nh3')) return 'amônia';
+    }
+    
+    // Fallback: buscar no array de sensores se tiver _id
+    if (sensor._id && sensores) {
+      const full = sensores.find(x => String(x._id) === String(sensor._id));
+      if (full && full.id_tipo_sensor) {
+        if (typeof full.id_tipo_sensor === 'object' && full.id_tipo_sensor?.descricao) {
+          return full.id_tipo_sensor.descricao;
+        }
+        if (typeof full.id_tipo_sensor === 'string') {
+          return full.id_tipo_sensor;
+        }
+      }
+    }
+    
+    return 'sensor';
+  };
 
   const load = async () => {
     try {
@@ -286,6 +330,47 @@ export default function MasterPanel() {
 
   const act = async (id, op) => {
     const token = getToken();
+    
+    // Se for aprovar e a ação for associar_funcionario, usar a fazenda do request
+    if (op === 'approve') {
+      const request = items.find(r => r._id === id) || allRequests.find(r => r._id === id);
+      if (request) {
+        // Para associar_funcionario, usar a fazenda do admin solicitante (já vem no request)
+        if (request.action === 'associar_funcionario') {
+          const fazendaId = request.fazenda?._id || request.fazenda || null;
+          if (!fazendaId) {
+            alert('Erro: Fazenda não encontrada na solicitação.');
+            return;
+          }
+          try {
+            const response = await axios.post(
+              `${apiUrl}/requests/${id}/approve`,
+              { fazendaId },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            console.log('Request atualizado:', response.data);
+            await load();
+            if (tab === 'requests') {
+              const updatedRequests = await loadAllRequests();
+              setAllRequests(updatedRequests);
+            }
+          } catch (error) {
+            alert('Erro ao aprovar: ' + (error?.response?.data?.error || error.message));
+          }
+          return;
+        }
+        
+        // Para cadastrar_funcionario, ainda precisa do modal
+        if (request.action === 'cadastrar_funcionario') {
+          setPendingApproveRequestId(id);
+          setSelectedFazendaId('');
+          setShowApproveFuncionarioModal(true);
+          return;
+        }
+      }
+    }
+    
+    // Para outras aprovações ou rejeições, fazer direto
     const response = await axios.post(`${apiUrl}/requests/${id}/${op}`, {}, { headers: { Authorization: `Bearer ${token}` } });
     console.log('Request atualizado:', response.data);
     await load();
@@ -294,6 +379,33 @@ export default function MasterPanel() {
       const updatedRequests = await loadAllRequests();
       console.log('Requests recarregados:', updatedRequests);
       setAllRequests(updatedRequests);
+    }
+  };
+
+  const handleApproveFuncionario = async () => {
+    if (!selectedFazendaId) {
+      alert('Por favor, selecione uma fazenda.');
+      return;
+    }
+
+    try {
+      const token = getToken();
+      const response = await axios.post(
+        `${apiUrl}/requests/${pendingApproveRequestId}/approve`,
+        { fazendaId: selectedFazendaId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      console.log('Request atualizado:', response.data);
+      setShowApproveFuncionarioModal(false);
+      setPendingApproveRequestId(null);
+      setSelectedFazendaId('');
+      await load();
+      if (tab === 'requests') {
+        const updatedRequests = await loadAllRequests();
+        setAllRequests(updatedRequests);
+      }
+    } catch (error) {
+      alert('Erro ao aprovar: ' + (error?.response?.data?.error || error.message));
     }
   };
 
@@ -400,6 +512,70 @@ export default function MasterPanel() {
           <div><strong>Novo Apelido:</strong> {payload.apelido || 'N/A'}</div>
         </div>
       );
+    } else if (action === 'cadastrar_funcionario') {
+      return (
+        <div style={{ 
+          background: '#f8fafc', 
+          padding: 12, 
+          borderRadius: 6, 
+          marginTop: 8,
+          border: '1px solid #e2e8f0'
+        }}>
+          <div><strong>Nome:</strong> {payload.nome || 'N/A'}</div>
+          <div><strong>Email:</strong> {payload.email || 'N/A'}</div>
+          <div style={{ color: '#6b7280', fontSize: 13, marginTop: 4 }}>
+            Selecione a fazenda ao aprovar.
+          </div>
+        </div>
+      );
+    } else if (action === 'associar_funcionario') {
+      return (
+        <div style={{ 
+          background: '#f8fafc', 
+          padding: 12, 
+          borderRadius: 6, 
+          marginTop: 8,
+          border: '1px solid #e2e8f0'
+        }}>
+          <div><strong>Email do Funcionário:</strong> {payload.email || 'N/A'}</div>
+          <div style={{ color: '#6b7280', fontSize: 13, marginTop: 4 }}>
+            Selecione a fazenda ao aprovar para associar este funcionário.
+          </div>
+        </div>
+      );
+    } else if (action === 'cadastrar_proprietario') {
+      return (
+        <div style={{ 
+          background: '#f8fafc', 
+          padding: 12, 
+          borderRadius: 6, 
+          marginTop: 8,
+          border: '1px solid #e2e8f0'
+        }}>
+          <div><strong>Nome:</strong> {payload.nome || 'N/A'}</div>
+          <div><strong>Email:</strong> {payload.email || 'N/A'}</div>
+          {payload.fazenda && (
+            <div style={{ marginTop: 8 }}>
+              <strong>Fazenda:</strong> {payload.fazenda.nome || 'N/A'}
+            </div>
+          )}
+        </div>
+      );
+    } else if (action === 'associar_funcionario') {
+      return (
+        <div style={{ 
+          background: '#f8fafc', 
+          padding: 12, 
+          borderRadius: 6, 
+          marginTop: 8,
+          border: '1px solid #e2e8f0'
+        }}>
+          <div><strong>Email do Funcionário:</strong> {payload.emailFuncionario || 'N/A'}</div>
+          <div style={{ color: '#6b7280', fontSize: 13, marginTop: 4 }}>
+            Funcionário será associado à fazenda do solicitante (Admin).
+          </div>
+        </div>
+      );
     } else {
       // Fallback para outras ações
       return (
@@ -425,6 +601,9 @@ export default function MasterPanel() {
       cadastrar_cativeiro: 'Cadastrar cativeiro',
       editar_cativeiro: 'Editar cativeiro',
       editar_sensor: 'Editar sensor',
+      cadastrar_funcionario: 'Cadastrar funcionário',
+      associar_funcionario: 'Associar funcionário à fazenda',
+      cadastrar_proprietario: 'Cadastrar proprietário',
     };
     return map[action] || action;
   };
@@ -993,7 +1172,7 @@ export default function MasterPanel() {
                                       color: '#3730a3',
                                       fontWeight: 600,
                                       textTransform: 'uppercase'
-                                    }}>{(s.id_tipo_sensor || 'sensor')}</span>
+                                    }}>{getSensorType(s)}</span>
                                     <span style={{ fontWeight: 600 }}>{s.apelido || '—'}</span>
                                     <button onClick={async () => {
                                       try {
@@ -1069,7 +1248,7 @@ export default function MasterPanel() {
             <div key={s._id} style={{ border: '1px solid #eee', borderRadius: 8, padding: 12, marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div><b>Tipo:</b> {s.id_tipo_sensor}</div>
+                  <div><b>Tipo:</b> {getSensorType(s)}</div>
                   <div><b>Apelido:</b> {s.apelido || '—'}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -1516,6 +1695,78 @@ export default function MasterPanel() {
                 alert('Erro ao editar cativeiro.');
               }
             }} style={{ border: 'none', background: '#3b82f6', color: '#fff', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>Salvar</button>
+          </div>
+        </div>
+      </Modal>
+      {/* Modal de aprovação de funcionário */}
+      <Modal isOpen={showApproveFuncionarioModal} onClose={() => {
+        setShowApproveFuncionarioModal(false);
+        setPendingApproveRequestId(null);
+        setSelectedFazendaId('');
+      }} title={(() => {
+        const request = items.find(r => r._id === pendingApproveRequestId) || allRequests.find(r => r._id === pendingApproveRequestId);
+        return request && request.action === 'associar_funcionario' 
+          ? 'Aprovar Associação de Funcionário' 
+          : 'Aprovar Cadastro de Funcionário';
+      })()}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontWeight: 600, marginBottom: 4 }}>
+              Selecionar Fazenda: <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <select 
+              value={selectedFazendaId} 
+              onChange={(e) => setSelectedFazendaId(e.target.value)} 
+              style={{ width: '100%', padding: 8, border: '1px solid #ddd', borderRadius: 6 }}
+            >
+              <option value="">-- Selecione uma fazenda --</option>
+              {fazendas.map(f => (
+                <option key={f._id} value={f._id}>
+                  {getFazendaName(f._id)}
+                </option>
+              ))}
+            </select>
+            <p style={{ fontSize: '12px', color: '#666', marginTop: 4 }}>
+              {(() => {
+                const request = items.find(r => r._id === pendingApproveRequestId) || allRequests.find(r => r._id === pendingApproveRequestId);
+                return request && request.action === 'associar_funcionario'
+                  ? 'O funcionário será associado a esta fazenda e terá acesso aos cativeiros dela.'
+                  : 'O funcionário será relacionado a esta fazenda e terá acesso aos cativeiros dela.';
+              })()}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+            <button
+              onClick={() => {
+                setShowApproveFuncionarioModal(false);
+                setPendingApproveRequestId(null);
+                setSelectedFazendaId('');
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#6b7280',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer'
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleApproveFuncionario}
+              disabled={!selectedFazendaId}
+              style={{
+                padding: '8px 16px',
+                background: selectedFazendaId ? '#10b981' : '#9ca3af',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                cursor: selectedFazendaId ? 'pointer' : 'not-allowed'
+              }}
+            >
+              Confirmar Aprovação
+            </button>
           </div>
         </div>
       </Modal>

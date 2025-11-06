@@ -108,7 +108,7 @@ const LoginContent = () => {
         {error && <div className={styles.errorMsg}>{error}</div>}
         <div className={styles.registerRow}>
           <span>Não tem uma conta?</span>
-          <Link href="/register" className={styles.registerLink}>Cadastre-se agora</Link>
+          <Link href="/register-type" className={styles.registerLink}>Cadastre-se agora</Link>
         </div>
       </form>
       <div className={styles.logoWrapper}>
