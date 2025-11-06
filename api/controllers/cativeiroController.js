@@ -571,4 +571,28 @@ const getCativeirosStatus = async (req, res) => {
   }
 };
 
-export default { createCativeiro, getAllCativeiros, getAllTiposCamarao, getCativeiroById, updateCativeiro, deleteCativeiro, getAllCondicoesIdeais, getSensoresCativeiro, getCativeirosStatus }; 
+// Método específico para atualizar dados do cativeiro sem enviar resposta
+const updateCativeiroData = async (id, data) => {
+  try {
+    const result = await cativeiroService.update(id, data);
+    if (!result) {
+      throw new Error('Cativeiro não encontrado.');
+    }
+    return result;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export default { 
+  createCativeiro, 
+  getAllCativeiros, 
+  getAllTiposCamarao, 
+  getCativeiroById, 
+  updateCativeiro, 
+  updateCativeiroData,
+  deleteCativeiro, 
+  getAllCondicoesIdeais, 
+  getSensoresCativeiro, 
+  getCativeirosStatus 
+}; 

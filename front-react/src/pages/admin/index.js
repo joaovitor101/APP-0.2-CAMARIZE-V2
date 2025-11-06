@@ -19,8 +19,11 @@ export default function AdminPanel() {
   const [tiposCamarao, setTiposCamarao] = useState([]);
   const [condicoesIdeais, setCondicoesIdeais] = useState([]);
   const [sensores, setSensores] = useState([]); // mantemos carregado para futuras funcionalidades
+  const [previewImage, setPreviewImage] = useState({});  // cativeiroId -> imageUrl
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const fileInputRef = useRef(null);
+  const [uploadTargetCativeiro, setUploadTargetCativeiro] = useState(null);
   const [showNewTipoModal, setShowNewTipoModal] = useState(false);
   const [newTipoNome, setNewTipoNome] = useState('');
   const [swapForm, setSwapForm] = useState({ cativeiroId: '', temperatura: false, ph: false, amonia: false });
@@ -535,6 +538,34 @@ export default function AdminPanel() {
     await load();
   };
 
+  // Handlers to upload photo for a cativeiro (used by the "Alterar foto" button)
+  const handleCativeiroFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // basic validation
+    if (!file.type.startsWith('image/')) { alert('Por favor selecione uma imagem.'); e.target.value = ''; return; }
+    if (file.size > 5 * 1024 * 1024) { alert('A imagem deve ter menos de 5MB.'); e.target.value = ''; return; }
+    if (!uploadTargetCativeiro) { alert('Alvo inválido para upload.'); e.target.value = ''; return; }
+    await uploadCativeiroPhoto(uploadTargetCativeiro, file);
+    e.target.value = '';
+    setUploadTargetCativeiro(null);
+  };
+
+  const uploadCativeiroPhoto = async (cativeiroId, file) => {
+    try {
+      const token = getToken();
+      const headers = { Authorization: `Bearer ${token}` };
+      const form = new FormData();
+      form.append('foto', file);
+      await axios.post(`${apiUrl}/cativeiros/${cativeiroId}/foto`, form, { headers: { ...headers, 'Content-Type': 'multipart/form-data' } });
+      alert('Foto atualizada com sucesso!');
+      await load();
+    } catch (err) {
+      console.error('Erro ao enviar foto do cativeiro:', err);
+      alert('Falha ao atualizar foto. Veja o console para mais detalhes.');
+    }
+  };
+
   const act = async (id, op) => {
     const token = getToken();
     await axios.post(`${apiUrl}/requests/${id}/${op}`, {}, { headers: { Authorization: `Bearer ${token}` } });
@@ -639,6 +670,7 @@ export default function AdminPanel() {
 
   return (
     <div style={{ padding: 20 }}>
+      <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }} onChange={handleCativeiroFileChange} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h2>Painel do Admin</h2>
         <button
@@ -839,6 +871,26 @@ export default function AdminPanel() {
                       </div>
                       {expandedCativeiro[cativeiro._id] && (
                         <div style={{ padding: 10 }}>
+                          {/* Foto do cativeiro */}
+                          <div style={{ marginBottom: 16 }}>
+                            <button
+                              onClick={() => { setUploadTargetCativeiro(cativeiro._id); fileInputRef.current?.click(); }}
+                              style={{
+                                padding: '8px 12px',
+                                background: '#f3f4f6',
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <span>📷</span>
+                              <span>Alterar foto do cativeiro</span>
+                            </button>
+                          </div>
+
                           <div style={{ marginBottom: 8 }}>
                             <strong>Tipo de Camarão:</strong>
                             <select
