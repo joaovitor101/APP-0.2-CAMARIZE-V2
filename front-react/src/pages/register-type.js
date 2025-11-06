@@ -1,13 +1,27 @@
 import styles from "@/components/LoginContent/LoginContent.module.css";
 import Image from "next/image";
 import { useRouter } from "next/router";
+import { useState, useEffect } from "react";
 
 export default function RegisterTypePage() {
   const router = useRouter();
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    if (router.isReady) {
+      setIsReady(true);
+    }
+  }, [router.isReady]);
 
   const handleSelectType = (tipo) => {
-    // Redireciona para a página unificada de login/cadastro com o tipo selecionado
-    router.push(`/auth?tipo=${tipo}`);
+    console.log('Tipo selecionado:', tipo);
+    if (!isReady) {
+      console.log('Router não está pronto ainda, aguardando...');
+      return;
+    }
+    
+    // Usar window.location diretamente para garantir que funciona
+    window.location.href = `/auth?tipo=${tipo}`;
   };
 
   return (
@@ -46,7 +60,12 @@ export default function RegisterTypePage() {
           {/* Card Funcionário */}
           <button
             type="button"
-            onClick={() => handleSelectType('funcionario')}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Botão funcionário clicado');
+              handleSelectType('funcionario');
+            }}
             style={{
               width: '100%',
               padding: '28px 24px',
@@ -64,7 +83,9 @@ export default function RegisterTypePage() {
               gap: '12px',
               boxShadow: '0 4px 14px rgba(102, 126, 234, 0.25)',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              zIndex: 1,
+              pointerEvents: 'auto'
             }}
             onMouseOver={(e) => {
               e.currentTarget.style.transform = 'translateY(-4px)';
@@ -103,7 +124,12 @@ export default function RegisterTypePage() {
           {/* Card Proprietário */}
           <button
             type="button"
-            onClick={() => handleSelectType('proprietario')}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Botão proprietário clicado');
+              handleSelectType('proprietario');
+            }}
             style={{
               width: '100%',
               padding: '28px 24px',
@@ -121,7 +147,9 @@ export default function RegisterTypePage() {
               gap: '12px',
               boxShadow: '0 4px 14px rgba(245, 87, 108, 0.25)',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              zIndex: 1,
+              pointerEvents: 'auto'
             }}
             onMouseOver={(e) => {
               e.currentTarget.style.transform = 'translateY(-4px)';

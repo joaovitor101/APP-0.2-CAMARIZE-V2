@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import fazendaController from "./fazendaController.js";
 import Fazendas from "../models/Fazendas.js";
 import emailService from "../services/emailService.js";
+import requestService from "../services/requestService.js";
+import UsuariosxFazendas from "../models/UsuariosxFazendas.js";
 
 // JWTSecret
 const JWTSecret = process.env.JWT_SECRET || "apigamessecret";
@@ -200,4 +202,206 @@ const changeUserRole = async (req, res) => {
   }
 };
 
-export default { createUser, loginUser, JWTSecret, register, getUserById, updateUserPhoto, getCurrentUser, listUsers, listMasters, changeUserRole };
+// Cadastro de funcionário (cria usuário diretamente, sem fazenda associada)
+const registerFuncionario = async (req, res) => {
+  try {
+    console.log("🔍 [REGISTER FUNCIONARIO] Dados recebidos:", req.body);
+    const { nome, email, senha, foto_perfil } = req.body;
+    
+    // Verificar se o usuário já existe
+    const existingUser = await userService.getOne(email);
+    if (existingUser) {
+      console.log("❌ [REGISTER FUNCIONARIO] Usuário já existe:", email);
+      return res.status(400).json({ 
+        error: `Usuário com o email '${email}' já existe. Tente usar um email diferente ou faça login.` 
+      });
+    }
+
+    // Criar usuário como MEMBRO (funcionário) sem fazenda associada
+    // O admin fará a solicitação de associação à fazenda depois
+    const user = await userService.Create(nome, email, senha, foto_perfil, undefined, 'membro');
+    console.log("✅ [REGISTER FUNCIONARIO] Usuário criado:", user._id);
+
+    res.status(201).json({ 
+      message: "Cadastro realizado com sucesso! Aguarde a associação à fazenda pelo administrador.",
+      user
+    });
+  } catch (err) {
+    console.error("❌ [REGISTER FUNCIONARIO] Erro:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Cadastro de proprietário (cria solicitação ao invés de usuário direto)
+const registerProprietario = async (req, res) => {
+  try {
+    console.log("🔍 [REGISTER PROPRIETARIO] Dados recebidos:", req.body);
+    const { nome, email, senha, foto_perfil, fazenda } = req.body;
+    
+    // Verificar se o usuário já existe
+    const existingUser = await userService.getOne(email);
+    if (existingUser) {
+      console.log("❌ [REGISTER PROPRIETARIO] Usuário já existe:", email);
+      return res.status(400).json({ 
+        error: `Usuário com o email '${email}' já existe. Tente usar um email diferente ou faça login.` 
+      });
+    }
+
+    // Validar dados da fazenda
+    if (!fazenda || !fazenda.nome || !fazenda.rua || !fazenda.bairro || !fazenda.cidade || !fazenda.numero) {
+      return res.status(400).json({ 
+        error: "Dados da fazenda incompletos. Todos os campos são obrigatórios." 
+      });
+    }
+
+    // Criar solicitação para o master aprovar
+    const requestData = {
+      requesterUser: null, // Ainda não existe usuário
+      requesterRole: 'membro', // Será membro quando aprovado
+      targetRole: 'master',
+      type: 'pesada',
+      action: 'cadastrar_proprietario',
+      payload: {
+        nome,
+        email,
+        senha,
+        foto_perfil,
+        fazenda: {
+          nome: fazenda.nome,
+          rua: fazenda.rua,
+          bairro: fazenda.bairro,
+          cidade: fazenda.cidade,
+          numero: fazenda.numero
+        }
+      }
+    };
+
+    const createdRequest = await requestService.create(requestData);
+    console.log("✅ [REGISTER PROPRIETARIO] Solicitação criada:", createdRequest._id);
+
+    res.status(201).json({ 
+      message: "Solicitação de cadastro enviada com sucesso! Aguarde aprovação do Master.",
+      requestId: createdRequest._id
+    });
+  } catch (err) {
+    console.error("❌ [REGISTER PROPRIETARIO] Erro:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Verificar se email já existe (sem criar usuário)
+const checkEmailExists = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email é obrigatório' });
+    }
+
+    const user = await userService.getOne(email);
+    res.json({ exists: !!user });
+  } catch (err) {
+    console.error('Erro ao verificar email:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// Associar funcionário à fazenda do admin (chamado diretamente pelo admin, sem passar pelo master)
+const associarFuncionario = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const adminId = req.loggedUser?.id;
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email do funcionário é obrigatório' });
+    }
+
+    if (!adminId) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    // Buscar o admin logado
+    const admin = await userService.getById(adminId);
+    if (!admin) {
+      return res.status(404).json({ error: 'Admin não encontrado' });
+    }
+
+    // Verificar se é admin
+    if (admin.role !== 'admin') {
+      return res.status(403).json({ error: 'Apenas admins podem associar funcionários' });
+    }
+
+    // Buscar a fazenda do admin
+    const relAdminFazenda = await UsuariosxFazendas.findOne({ usuario: adminId }).populate('fazenda');
+    if (!relAdminFazenda || !relAdminFazenda.fazenda) {
+      return res.status(400).json({ error: 'Admin não possui fazenda associada. Entre em contato com o Master.' });
+    }
+
+    const fazendaId = relAdminFazenda.fazenda._id || relAdminFazenda.fazenda;
+
+    // Buscar o funcionário pelo email
+    const funcionario = await userService.getOne(email.trim());
+    if (!funcionario) {
+      return res.status(404).json({ 
+        error: `Funcionário com email '${email}' não encontrado. O funcionário deve se cadastrar primeiro.` 
+      });
+    }
+
+    // Verificar se é funcionário (membro)
+    if (funcionario.role !== 'membro') {
+      return res.status(400).json({ error: 'Apenas funcionários podem ser associados a fazendas dessa forma' });
+    }
+
+    // Verificar se já está associado
+    const relExists = await UsuariosxFazendas.findOne({ 
+      usuario: funcionario._id, 
+      fazenda: fazendaId 
+    });
+
+    if (relExists) {
+      return res.status(400).json({ 
+        error: `Funcionário já está associado à fazenda '${relAdminFazenda.fazenda.nome || fazendaId}'` 
+      });
+    }
+
+    // Criar relacionamento
+    await UsuariosxFazendas.create({ 
+      usuario: funcionario._id, 
+      fazenda: fazendaId 
+    });
+
+    console.log(`✅ Admin ${admin.email} associou funcionário ${funcionario.email} à fazenda ${fazendaId}`);
+
+    res.status(200).json({ 
+      message: `Funcionário ${funcionario.nome} associado com sucesso à fazenda!`,
+      funcionario: {
+        id: funcionario._id,
+        nome: funcionario.nome,
+        email: funcionario.email
+      },
+      fazenda: {
+        id: fazendaId,
+        nome: relAdminFazenda.fazenda.nome || 'N/A'
+      }
+    });
+  } catch (err) {
+    console.error('❌ [ASSOCIAR FUNCIONARIO] Erro:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export default { 
+  createUser, 
+  loginUser, 
+  JWTSecret, 
+  register, 
+  registerFuncionario,
+  registerProprietario,
+  checkEmailExists,
+  associarFuncionario,
+  getUserById, 
+  updateUserPhoto, 
+  getCurrentUser, 
+  listUsers, 
+  listMasters, 
+  changeUserRole 
+};

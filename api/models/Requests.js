@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const requestSchema = new mongoose.Schema({
-  requesterUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  requesterUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false }, // Permite null para cadastros de proprietário
   requesterRole: { type: String, enum: ['membro', 'admin'], required: true },
   targetRole: { type: String, enum: ['admin', 'master'], required: true },
   type: { type: String, enum: ['leve', 'pesada'], required: true },

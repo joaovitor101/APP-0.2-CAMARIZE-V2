@@ -65,16 +65,15 @@ const getParametrosAtuais = async (req, res) => {
       return res.status(400).json({ error: "ID do cativeiro é obrigatório" });
     }
 
-    // Busca o cativeiro para verificar se existe
-    const cativeiro = await Cativeiros.findById(cativeiroId);
+    // Busca o cativeiro e parâmetro em paralelo para melhor performance
+    const [cativeiro, parametroAtual] = await Promise.all([
+      Cativeiros.findById(cativeiroId).lean(),
+      ParametrosAtuais.findOne({ id_cativeiro: cativeiroId }).sort({ datahora: -1 }).lean()
+    ]);
+    
     if (!cativeiro) {
       return res.status(404).json({ error: "Cativeiro não encontrado" });
     }
-
-    // Busca o parâmetro mais recente do cativeiro
-    const parametroAtual = await ParametrosAtuais.findOne({ 
-      id_cativeiro: cativeiroId 
-    }).sort({ datahora: -1 });
 
     // Se não há dados, usa valores padrão
     const parametros = parametroAtual ? {
@@ -113,21 +112,22 @@ const getParametrosHistoricos = async (req, res) => {
       return res.status(400).json({ error: "ID do cativeiro é obrigatório" });
     }
 
-    // Busca o cativeiro para verificar se existe
-    const cativeiro = await Cativeiros.findById(cativeiroId);
+    // Busca o cativeiro e calcula data limite
+    const dataLimite = new Date();
+    dataLimite.setDate(dataLimite.getDate() - parseInt(dias));
+    
+    // Busca cativeiro e parâmetros em paralelo
+    const [cativeiro, parametros] = await Promise.all([
+      Cativeiros.findById(cativeiroId).lean(),
+      ParametrosAtuais.find({
+        id_cativeiro: cativeiroId,
+        datahora: { $gte: dataLimite }
+      }).sort({ datahora: 1 }).lean().limit(1000) // Limite para evitar sobrecarga
+    ]);
+    
     if (!cativeiro) {
       return res.status(404).json({ error: "Cativeiro não encontrado" });
     }
-
-    // Calcula a data limite (X dias atrás)
-    const dataLimite = new Date();
-    dataLimite.setDate(dataLimite.getDate() - parseInt(dias));
-
-    // Busca os parâmetros dos últimos X dias
-    const parametros = await ParametrosAtuais.find({
-      id_cativeiro: cativeiroId,
-      datahora: { $gte: dataLimite }
-    }).sort({ datahora: 1 });
 
     // Se não há dados históricos, retorna array vazio
     if (parametros.length === 0) {
@@ -173,16 +173,38 @@ const getDadosDashboard = async (req, res) => {
       return res.status(400).json({ error: "ID do cativeiro é obrigatório" });
     }
 
-    // Busca o cativeiro
-    const cativeiro = await Cativeiros.findById(cativeiroId);
+    // OTIMIZAÇÃO: Buscar cativeiro e dados em paralelo + usar agregação
+    const dataLimite = new Date();
+    dataLimite.setDate(dataLimite.getDate() - 7);
+    
+    const [cativeiro, parametroAtual, dadosAgregados] = await Promise.all([
+      Cativeiros.findById(cativeiroId).lean(),
+      ParametrosAtuais.findOne({ id_cativeiro: cativeiroId }).sort({ datahora: -1 }).lean(),
+      // Usar agregação para calcular médias diárias diretamente no banco
+      ParametrosAtuais.aggregate([
+        {
+          $match: {
+            id_cativeiro: cativeiroId,
+            datahora: { $gte: dataLimite }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: { format: "%Y-%m-%d", date: "$datahora" }
+            },
+            temperatura: { $avg: "$temp_atual" },
+            ph: { $avg: "$ph_atual" },
+            amonia: { $avg: "$amonia_atual" }
+          }
+        },
+        { $sort: { _id: 1 } }
+      ])
+    ]);
+    
     if (!cativeiro) {
       return res.status(404).json({ error: "Cativeiro não encontrado" });
     }
-
-    // Busca o parâmetro mais recente
-    const parametroAtual = await ParametrosAtuais.findOne({ 
-      id_cativeiro: cativeiroId 
-    }).sort({ datahora: -1 });
 
     // Se não há dados, usa valores padrão
     const dadosAtuais = parametroAtual ? {
@@ -197,32 +219,14 @@ const getDadosDashboard = async (req, res) => {
       datahora: null
     };
 
-    // Busca dados dos últimos 7 dias para o gráfico
-    const dataLimite = new Date();
-    dataLimite.setDate(dataLimite.getDate() - 7);
-
-    const parametrosHistoricos = await ParametrosAtuais.find({
-      id_cativeiro: cativeiroId,
-      datahora: { $gte: dataLimite }
-    }).sort({ datahora: 1 });
-
-    // Agrupa por dia e calcula médias
-    const dadosPorDia = {};
-    parametrosHistoricos.forEach(parametro => {
-      const data = new Date(parametro.datahora);
-      const dia = data.toISOString().split('T')[0];
-      
-      if (!dadosPorDia[dia]) {
-        dadosPorDia[dia] = {
-          temperatura: [],
-          ph: [],
-          amonia: []
-        };
-      }
-      
-      dadosPorDia[dia].temperatura.push(parametro.temp_atual);
-      dadosPorDia[dia].ph.push(parametro.ph_atual);
-      dadosPorDia[dia].amonia.push(parametro.amonia_atual);
+    // Criar mapa dos dados agregados
+    const dadosPorDia = new Map();
+    dadosAgregados.forEach(item => {
+      dadosPorDia.set(item._id, {
+        temperatura: item.temperatura,
+        ph: item.ph,
+        amonia: item.amonia
+      });
     });
 
     // Calcula médias diárias para os últimos 7 dias
@@ -232,13 +236,13 @@ const getDadosDashboard = async (req, res) => {
       data.setDate(data.getDate() - i);
       const dia = data.toISOString().split('T')[0];
       
-      if (dadosPorDia[dia]) {
-        const dados = dadosPorDia[dia];
+      const dados = dadosPorDia.get(dia);
+      if (dados) {
         dadosSemanais.push({
           data: dia,
-          temperatura: dados.temperatura.reduce((a, b) => a + b, 0) / dados.temperatura.length,
-          ph: dados.ph.reduce((a, b) => a + b, 0) / dados.ph.length,
-          amonia: dados.amonia.reduce((a, b) => a + b, 0) / dados.amonia.length
+          temperatura: Number(dados.temperatura.toFixed(2)),
+          ph: Number(dados.ph.toFixed(2)),
+          amonia: Number(dados.amonia.toFixed(3))
         });
       } else {
         // Se não há dados para este dia, usa valores padrão

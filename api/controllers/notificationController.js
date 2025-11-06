@@ -139,8 +139,8 @@ const sendEmailAlerts = async (notificationData) => {
   }
 };
 
-// Função para gerar notificações baseadas na comparação de dados
-const generateNotifications = async (usuarioId = null) => {
+// Função para gerar notificações baseadas na comparação de dados (OTIMIZADA)
+const generateNotifications = async (usuarioId = null, limit = 50) => {
   try {
     const notifications = [];
     
@@ -154,25 +154,52 @@ const generateNotifications = async (usuarioId = null) => {
       // Se não, busca todos os cativeiros (comportamento original)
       cativeiros = await Cativeiros.find()
         .populate('condicoes_ideais')
-        .populate('id_tipo_camarao');
+        .populate('id_tipo_camarao')
+        .lean(); // Usa lean() para melhor performance
     }
     
+    if (!cativeiros || cativeiros.length === 0) {
+      return [];
+    }
+    
+    // Buscar todos os parâmetros atuais de uma vez usando agregação
+    const cativeiroIds = cativeiros.map(c => c._id);
+    
+    // Buscar o parâmetro mais recente de cada cativeiro em uma única query
+    const parametrosRecentes = await ParametrosAtuais.aggregate([
+      { $match: { id_cativeiro: { $in: cativeiroIds } } },
+      { $sort: { datahora: -1 } },
+      {
+        $group: {
+          _id: '$id_cativeiro',
+          temp_atual: { $first: '$temp_atual' },
+          ph_atual: { $first: '$ph_atual' },
+          amonia_atual: { $first: '$amonia_atual' },
+          datahora: { $first: '$datahora' },
+          parametroId: { $first: '$_id' }
+        }
+      }
+    ]);
+    
+    // Criar um mapa para acesso rápido
+    const parametrosMap = new Map();
+    parametrosRecentes.forEach(p => {
+      parametrosMap.set(p._id.toString(), p);
+    });
+    
+    // Tolerâncias mais realistas por parâmetro
+    const toleranciaTemp = 0.15; // 15% para temperatura
+    const toleranciaPh = 0.2;    // 20% para pH
+    const toleranciaAmonia = 0.25; // 25% para amônia
+    
     for (const cativeiro of cativeiros) {
-      // Busca o parâmetro atual mais recente para este cativeiro
-      const parametroAtual = await ParametrosAtuais.findOne({ 
-        id_cativeiro: cativeiro._id 
-      }).sort({ datahora: -1 });
+      const parametroAtual = parametrosMap.get(cativeiro._id.toString());
       
       if (!parametroAtual || !cativeiro.condicoes_ideais) {
         continue; // Pula se não há dados para comparar
       }
       
       const condicaoIdeal = cativeiro.condicoes_ideais;
-      
-      // Tolerâncias mais realistas por parâmetro
-      const toleranciaTemp = 0.15; // 15% para temperatura
-      const toleranciaPh = 0.2;    // 20% para pH
-      const toleranciaAmonia = 0.25; // 25% para amônia
       
       // Compara temperatura
       if (condicaoIdeal.temp_ideal) {
@@ -182,7 +209,7 @@ const generateNotifications = async (usuarioId = null) => {
         if (diffTemp > toleranciaTempValor) {
           const tipo = parametroAtual.temp_atual > condicaoIdeal.temp_ideal ? 'aumento' : 'diminuição';
           const notificationData = {
-            id: `temp_${cativeiro._id}_${parametroAtual._id}`,
+            id: `temp_${cativeiro._id}_${parametroAtual.parametroId}`,
             tipo: 'temperatura',
             cativeiro: cativeiro._id,
             cativeiroNome: cativeiro.nome || `Cativeiro ${cativeiro._id}`,
@@ -196,9 +223,9 @@ const generateNotifications = async (usuarioId = null) => {
           
           notifications.push(notificationData);
           
-          // Enviar notificações automaticamente
-          await sendNotificationsToAllSubscribers(notificationData);
-          await sendEmailAlerts(notificationData);
+          // Enviar notificações em background (não bloqueia a resposta)
+          sendNotificationsToAllSubscribers(notificationData).catch(err => console.error('Erro ao enviar push:', err));
+          sendEmailAlerts(notificationData).catch(err => console.error('Erro ao enviar email:', err));
         }
       }
       
@@ -210,7 +237,7 @@ const generateNotifications = async (usuarioId = null) => {
         if (diffPh > toleranciaPhValor) {
           const tipo = parametroAtual.ph_atual > condicaoIdeal.ph_ideal ? 'aumento' : 'diminuição';
           const notificationData = {
-            id: `ph_${cativeiro._id}_${parametroAtual._id}`,
+            id: `ph_${cativeiro._id}_${parametroAtual.parametroId}`,
             tipo: 'ph',
             cativeiro: cativeiro._id,
             cativeiroNome: cativeiro.nome || `Cativeiro ${cativeiro._id}`,
@@ -224,9 +251,9 @@ const generateNotifications = async (usuarioId = null) => {
           
           notifications.push(notificationData);
           
-          // Enviar notificações automaticamente
-          await sendNotificationsToAllSubscribers(notificationData);
-          await sendEmailAlerts(notificationData);
+          // Enviar notificações em background
+          sendNotificationsToAllSubscribers(notificationData).catch(err => console.error('Erro ao enviar push:', err));
+          sendEmailAlerts(notificationData).catch(err => console.error('Erro ao enviar email:', err));
         }
       }
       
@@ -238,7 +265,7 @@ const generateNotifications = async (usuarioId = null) => {
         if (diffAmonia > toleranciaAmoniaValor) {
           const tipo = parametroAtual.amonia_atual > condicaoIdeal.amonia_ideal ? 'aumento' : 'diminuição';
           const notificationData = {
-            id: `amonia_${cativeiro._id}_${parametroAtual._id}`,
+            id: `amonia_${cativeiro._id}_${parametroAtual.parametroId}`,
             tipo: 'amonia',
             cativeiro: cativeiro._id,
             cativeiroNome: cativeiro.nome || `Cativeiro ${cativeiro._id}`,
@@ -252,9 +279,9 @@ const generateNotifications = async (usuarioId = null) => {
           
           notifications.push(notificationData);
           
-          // Enviar notificações automaticamente
-          await sendNotificationsToAllSubscribers(notificationData);
-          await sendEmailAlerts(notificationData);
+          // Enviar notificações em background
+          sendNotificationsToAllSubscribers(notificationData).catch(err => console.error('Erro ao enviar push:', err));
+          sendEmailAlerts(notificationData).catch(err => console.error('Erro ao enviar email:', err));
         }
       }
     }
@@ -262,18 +289,21 @@ const generateNotifications = async (usuarioId = null) => {
     // Ordena por data/hora (mais recentes primeiro)
     notifications.sort((a, b) => new Date(b.datahora) - new Date(a.datahora));
     
-    return notifications;
+    // Limitar resultados para melhor performance
+    return notifications.slice(0, limit);
   } catch (error) {
     console.error('Erro ao gerar notificações:', error);
     return [];
   }
 };
 
-// Controller para buscar notificações
+// Controller para buscar notificações (OTIMIZADO)
 const getNotifications = async (req, res) => {
   try {
     const usuarioId = req.loggedUser?.id;
-    const notifications = await generateNotifications(usuarioId);
+    const limit = parseInt(req.query.limit) || 50; // Limite padrão de 50 notificações
+    
+    const notifications = await generateNotifications(usuarioId, limit);
     
     res.status(200).json({
       success: true,

@@ -151,13 +151,13 @@ const getAllCativeiros = async (req, res) => {
     console.log('🔍 DEBUG req.loggedUser completo:', req.loggedUser);
     
     let cativeiros = [];
-    if (role === 'master' || role === 'admin') {
-      // Master e Admin enxergam todos os cativeiros, já com dados de fazenda anexados
-      console.log('🔍 DEBUG - Buscando todos os cativeiros para', role);
+    if (role === 'master') {
+      // Master enxerga todos os cativeiros
+      console.log('🔍 DEBUG - Buscando todos os cativeiros para master');
       cativeiros = await cativeiroService.getAll();
       console.log('🔍 DEBUG - Cativeiros encontrados:', cativeiros.length);
     } else {
-      // Membro ve pelos relacionamentos das suas fazendas
+      // Admin e Membro veem apenas seus próprios cativeiros pelos relacionamentos das suas fazendas
       console.log('🔍 DEBUG - Buscando cativeiros por relacionamentos para role:', role);
       cativeiros = await cativeiroService.getAllByUsuarioViaRelacionamentos(usuarioId);
       console.log('🔍 DEBUG - Cativeiros encontrados por relacionamento:', cativeiros.length);
@@ -173,7 +173,7 @@ const getAllCativeiros = async (req, res) => {
 
 const getAllTiposCamarao = async (req, res) => {
   try {
-    const tipos = await TiposCamarao.find();
+    const tipos = await TiposCamarao.find().lean(); // Usa lean() para melhor performance
     res.status(200).json(tipos);
   } catch (error) {
     res.status(500).json({ error: "Erro ao buscar tipos de camarão." });
@@ -347,7 +347,7 @@ const deleteCativeiro = async (req, res) => {
 
 const getAllCondicoesIdeais = async (req, res) => {
   try {
-    const condicoes = await CondicoesIdeais.find().populate('id_tipo_camarao');
+    const condicoes = await CondicoesIdeais.find().populate('id_tipo_camarao').lean(); // Usa lean() para melhor performance
     res.status(200).json(condicoes);
   } catch (error) {
     res.status(500).json({ error: "Erro ao buscar condições ideais." });
@@ -358,10 +358,24 @@ const getSensoresCativeiro = async (req, res) => {
   try {
     const { cativeiroId } = req.params;
     const sensores = await SensoresxCativeiros.find({ id_cativeiro: cativeiroId })
-      .populate('id_sensor')
+      .populate({
+        path: 'id_sensor',
+        populate: {
+          path: 'id_tipo_sensor',
+          select: 'descricao'
+        }
+      })
       .populate('id_cativeiro');
-    res.status(200).json(sensores);
+    
+    // Converter para objetos simples manualmente para manter performance
+    const sensoresSimplificados = sensores.map(s => {
+      const sObj = s.toObject ? s.toObject() : s;
+      return sObj;
+    });
+    
+    res.status(200).json(sensoresSimplificados);
   } catch (error) {
+    console.error('Erro ao buscar sensores do cativeiro:', error);
     res.status(500).json({ error: "Erro ao buscar sensores do cativeiro." });
   }
 };
@@ -381,13 +395,33 @@ const getCativeirosStatus = async (req, res) => {
     let cativeirosCritico = 0;
     let cativeirosSemDados = 0;
 
+    // OTIMIZAÇÃO: Buscar todos os parâmetros de uma vez usando agregação
+    const cativeiroIds = cativeiros.map(c => c._id);
+    const parametrosRecentes = await ParametrosAtuais.aggregate([
+      { $match: { id_cativeiro: { $in: cativeiroIds } } },
+      { $sort: { datahora: -1 } },
+      {
+        $group: {
+          _id: '$id_cativeiro',
+          temp_atual: { $first: '$temp_atual' },
+          ph_atual: { $first: '$ph_atual' },
+          amonia_atual: { $first: '$amonia_atual' },
+          datahora: { $first: '$datahora' }
+        }
+      }
+    ]);
+    
+    // Criar mapa para acesso rápido
+    const parametrosMap = new Map();
+    parametrosRecentes.forEach(p => {
+      parametrosMap.set(p._id.toString(), p);
+    });
+
     for (const cativeiro of cativeiros) {
       totalCativeiros++;
       
-      // Busca o parâmetro atual mais recente para este cativeiro
-      const parametroAtual = await ParametrosAtuais.findOne({ 
-        id_cativeiro: cativeiro._id 
-      }).sort({ datahora: -1 });
+      // Busca o parâmetro atual do mapa
+      const parametroAtual = parametrosMap.get(cativeiro._id.toString());
       
       if (!parametroAtual || !cativeiro.condicoes_ideais) {
         cativeirosComStatus.push({

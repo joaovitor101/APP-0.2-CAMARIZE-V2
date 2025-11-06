@@ -71,7 +71,8 @@ const listForTarget = async (req, res) => {
 const approve = async (req, res) => {
   try {
     const { id } = req.params;
-    const updated = await requestService.approve(id, req.loggedUser.id);
+    const { fazendaId } = req.body; // FazendaId opcional (obrigatório para cadastrar_funcionario)
+    const updated = await requestService.approve(id, req.loggedUser.id, fazendaId);
     if (!updated) return res.status(404).json({ error: 'Solicitação não encontrada' });
     res.json(updated);
   } catch (err) {

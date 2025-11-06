@@ -5,14 +5,24 @@ import DietasxCativeiros from "../models/DietasxCativeiros.js";
 // Admin: criar dieta (somente descricao é obrigatória; demais campos são opcionais)
 const createDieta = async (req, res) => {
   try {
-    const { descricao, quantidade } = req.body;
+    const { descricao, quantidade, horarios, quantidadeRefeicoes } = req.body;
     if (!descricao || !String(descricao).trim()) {
       return res.status(400).json({ error: "descricao é obrigatória" });
     }
     if (quantidade === undefined || quantidade === null || isNaN(Number(quantidade))) {
       return res.status(400).json({ error: "quantidade (g) é obrigatória" });
     }
-    const dieta = await Dietas.create({ descricao: String(descricao).trim(), quantidade: Number(quantidade) });
+    const dietaData = {
+      descricao: String(descricao).trim(),
+      quantidade: Number(quantidade)
+    };
+    if (Array.isArray(horarios) && horarios.length > 0) {
+      dietaData.horarios = horarios;
+    }
+    if (quantidadeRefeicoes !== undefined && quantidadeRefeicoes !== null) {
+      dietaData.quantidadeRefeicoes = Number(quantidadeRefeicoes);
+    }
+    const dieta = await Dietas.create(dietaData);
     return res.status(201).json(dieta);
   } catch (err) {
     console.error('Erro ao criar dieta:', err);
@@ -35,10 +45,12 @@ const listDietas = async (req, res) => {
 const updateDieta = async (req, res) => {
   try {
     const { id } = req.params;
-    const { descricao, quantidade } = req.body;
+    const { descricao, quantidade, horarios, quantidadeRefeicoes } = req.body;
     const update = {};
     if (typeof descricao !== 'undefined') update.descricao = descricao;
     if (typeof quantidade !== 'undefined') update.quantidade = Number(quantidade);
+    if (Array.isArray(horarios)) update.horarios = horarios;
+    if (quantidadeRefeicoes !== undefined && quantidadeRefeicoes !== null) update.quantidadeRefeicoes = Number(quantidadeRefeicoes);
     const dieta = await Dietas.findByIdAndUpdate(id, update, { new: true });
     if (!dieta) return res.status(404).json({ error: 'Dieta não encontrada' });
     return res.json(dieta);
@@ -111,6 +123,8 @@ const getDietaAtual = async (req, res) => {
       cativeiroId,
       dietaId: rel.dieta._id,
       horaAlimentacao: rel.dieta.horaAlimentacao,
+      horarios: rel.dieta.horarios || [],
+      quantidadeRefeicoes: rel.dieta.quantidadeRefeicoes || null,
       quantidade: rel.dieta.quantidade,
       descricao: rel.dieta.descricao || null,
     });

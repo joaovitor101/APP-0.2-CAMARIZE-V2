@@ -120,6 +120,7 @@ export default function AdminPanel() {
   const load = async () => {
     try {
       setLoading(true);
+      setError('');
       const token = getToken();
       const headers = { Authorization: `Bearer ${token}` };
       const [reqs, fzs, cats, tipos, condicoes, sens, us] = await Promise.all([
@@ -139,7 +140,9 @@ export default function AdminPanel() {
       setSensores(sens.data);
       setUsers(us.data || []);
     } catch (e) {
-      setError('Erro ao carregar dados');
+      console.error('Erro ao carregar dados:', e);
+      const errorMessage = e?.response?.data?.error || e?.message || 'Erro ao carregar dados';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

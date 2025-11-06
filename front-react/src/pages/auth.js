@@ -110,24 +110,22 @@ export default function AuthPage() {
 
             router.push('/home');
           } else if (tipo === 'proprietario') {
-            // Para proprietário, ainda precisa criar solicitação
-            // Por enquanto, vamos criar uma solicitação
-            const registerResponse = await axios.post(`${apiUrl}/users/register/proprietario`, {
-              nome: nome.trim(),
-              email: email.trim(),
-              senha: senha,
-              foto_perfil: null,
-              fazenda: {
-                nome: '', // Será preenchido depois
-                rua: '',
-                bairro: '',
-                cidade: '',
-                numero: ''
-              }
-            });
-
-            // Redireciona para página de sucesso
-            router.push(`/register/sucesso?requestId=${registerResponse.data.requestId}&email=${encodeURIComponent(email)}`);
+            // Para proprietário, precisa preencher dados da fazenda
+            // Salvar dados temporários e redirecionar para página de cadastro de fazenda
+            if (typeof window !== 'undefined') {
+              const pendingData = {
+                tipoUsuario: 'proprietario',
+                nome: nome.trim(),
+                email: email.trim(),
+                senha: senha
+              };
+              sessionStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
+              localStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
+            }
+            
+            // Redireciona para página de cadastro de fazenda
+            router.push('/register/proprietario');
+            return;
           }
         } else {
           // Outros erros de login (senha incorreta, etc)
@@ -164,21 +162,21 @@ export default function AuthPage() {
                 router.push('/home');
                 return;
               } else if (tipo === 'proprietario') {
-                const registerResponse = await axios.post(`${apiUrl}/users/register/proprietario`, {
-                  nome: nome.trim(),
-                  email: email.trim(),
-                  senha: senha,
-                  foto_perfil: null,
-                  fazenda: {
-                    nome: '',
-                    rua: '',
-                    bairro: '',
-                    cidade: '',
-                    numero: ''
-                  }
-                });
-
-                router.push(`/register/sucesso?requestId=${registerResponse.data.requestId}&email=${encodeURIComponent(email)}`);
+                // Para proprietário, precisa preencher dados da fazenda
+                // Salvar dados temporários e redirecionar para página de cadastro de fazenda
+                if (typeof window !== 'undefined') {
+                  const pendingData = {
+                    tipoUsuario: 'proprietario',
+                    nome: nome.trim(),
+                    email: email.trim(),
+                    senha: senha
+                  };
+                  sessionStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
+                  localStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
+                }
+                
+                // Redireciona para página de cadastro de fazenda
+                router.push('/register/proprietario');
                 return;
               }
             } catch (registerError) {

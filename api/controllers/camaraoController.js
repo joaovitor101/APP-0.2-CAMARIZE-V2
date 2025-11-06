@@ -17,7 +17,7 @@ const createCamarao = async (req, res) => {
 
 const getAllCamaroes = async (req, res) => {
   try {
-    const tipos = await TiposCamarao.find();
+    const tipos = await TiposCamarao.find().lean(); // Usa lean() para melhor performance
     res.status(200).json(tipos);
   } catch (error) {
     res.status(500).json({ error: "Erro ao buscar tipos de camarão." });

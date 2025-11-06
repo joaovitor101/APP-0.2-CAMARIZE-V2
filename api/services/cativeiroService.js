@@ -3,23 +3,34 @@ import Cativeiros from "../models/Cativeiros.js";
 class cativeiroService {
   async getAll() {
     try {
-      const cativeiros = await Cativeiros.find()
-        .populate('id_tipo_camarao')
-        .populate('condicoes_ideais');
+      // OTIMIZAÇÃO: Buscar cativeiros e relacionamentos em paralelo + usar lean()
+      const FazendasxCativeiros = (await import('../models/FazendasxCativeiros.js')).default;
+      
+      const [cativeiros, rels] = await Promise.all([
+        Cativeiros.find()
+          .populate('id_tipo_camarao')
+          .populate('condicoes_ideais')
+          .lean(), // Usa lean() para melhor performance
+        FazendasxCativeiros.find({}, 'cativeiro fazenda').populate('fazenda').lean()
+      ]);
+      
+      // Criar mapa de relacionamentos para acesso O(1)
+      const relsMap = new Map();
+      rels.forEach(rel => {
+        if (rel.cativeiro && rel.fazenda) {
+          relsMap.set(rel.cativeiro.toString(), rel.fazenda);
+        }
+      });
       
       // Anexar dados da fazenda a cada cativeiro
-      const FazendasxCativeiros = (await import('../models/FazendasxCativeiros.js')).default;
-      const rels = await FazendasxCativeiros.find({}, 'cativeiro fazenda').populate('fazenda');
-      
       const cativeirosComFazenda = cativeiros.map(cativeiro => {
-        const cativeiroObj = cativeiro.toObject();
-        const relacao = rels.find(r => r.cativeiro.toString() === cativeiro._id.toString());
-        if (relacao && relacao.fazenda) {
-          cativeiroObj.fazenda = relacao.fazenda._id;
-          cativeiroObj.fazendaNome = relacao.fazenda.nome;
-          cativeiroObj.fazendaCodigo = relacao.fazenda.codigo;
+        const fazenda = relsMap.get(cativeiro._id.toString());
+        if (fazenda) {
+          cativeiro.fazenda = fazenda._id || fazenda;
+          cativeiro.fazendaNome = fazenda.nome;
+          cativeiro.fazendaCodigo = fazenda.codigo;
         }
-        return cativeiroObj;
+        return cativeiro;
       });
       
       return cativeirosComFazenda;
@@ -41,51 +52,36 @@ class cativeiroService {
 
   async getById(id) {
     try {
-      const cativeiro = await Cativeiros.findById(id)
-        .populate('id_tipo_camarao')
-        .populate('condicoes_ideais');
+      // OTIMIZAÇÃO: Buscar tudo em paralelo + usar lean()
+      const FazendasxCativeiros = (await import('../models/FazendasxCativeiros.js')).default;
+      const SensoresxCativeiros = (await import('../models/SensoresxCativeiros.js')).default;
+      
+      const [cativeiro, relacaoFazenda, sensoresRelacionados] = await Promise.all([
+        Cativeiros.findById(id)
+          .populate('id_tipo_camarao')
+          .populate('condicoes_ideais')
+          .lean(),
+        FazendasxCativeiros.findOne({ cativeiro: id }).populate('fazenda').lean(),
+        SensoresxCativeiros.find({ id_cativeiro: id }).populate('id_sensor').lean()
+      ]);
       
       if (!cativeiro) return null;
 
-      // Buscar fazenda relacionada
-      const FazendasxCativeiros = (await import('../models/FazendasxCativeiros.js')).default;
-      console.log('Buscando relacionamento para cativeiro:', id);
-      const relacaoFazenda = await FazendasxCativeiros.findOne({ cativeiro: id }).populate('fazenda');
-      console.log('Relacionamento encontrado:', relacaoFazenda);
-      
-      if (relacaoFazenda) {
-        console.log('Fazenda do relacionamento:', relacaoFazenda.fazenda);
-        cativeiro.fazenda = relacaoFazenda.fazenda._id;
+      // Anexar fazenda
+      if (relacaoFazenda && relacaoFazenda.fazenda) {
+        cativeiro.fazenda = relacaoFazenda.fazenda._id || relacaoFazenda.fazenda;
         cativeiro.fazendaNome = relacaoFazenda.fazenda.nome;
-        console.log('Campo fazenda setado no cativeiro:', cativeiro.fazenda);
-      } else {
-        console.log('Nenhum relacionamento encontrado para o cativeiro:', id);
+        cativeiro.fazendaCodigo = relacaoFazenda.fazenda.codigo;
       }
 
-      // Buscar sensores relacionados
-      const SensoresxCativeiros = (await import('../models/SensoresxCativeiros.js')).default;
-      const sensoresRelacionados = await SensoresxCativeiros.find({ id_cativeiro: id }).populate('id_sensor');
-      // Alguns relacionamentos podem apontar para sensores removidos → filtrar nulls
+      // Filtrar sensores válidos
       const sensores = sensoresRelacionados
         .map(rel => rel.id_sensor)
         .filter(Boolean);
-
-      // Adicionar sensores ao objeto do cativeiro
+      
       cativeiro.sensores = sensores;
       
-      // Converter para objeto simples para garantir serialização correta
-      const cativeiroObj = cativeiro.toObject();
-      cativeiroObj.sensores = sensores;
-      
-      // Garantir que a fazenda seja incluída no objeto
-      if (cativeiro.fazenda) {
-        cativeiroObj.fazenda = cativeiro.fazenda;
-      }
-      if (cativeiro.fazendaNome) {
-        cativeiroObj.fazendaNome = cativeiro.fazendaNome;
-      }
-      
-      return cativeiroObj;
+      return cativeiro;
     } catch (error) {
       console.log(error);
       return null;
@@ -128,30 +124,45 @@ class cativeiroService {
 
   async getAllByUsuarioViaRelacionamentos(usuarioId) {
     try {
-      // Buscar IDs das fazendas do usuário, populando os dados completos das fazendas
+      // OTIMIZAÇÃO: Buscar tudo em paralelo + usar lean() + Map para acesso rápido
       const UsuariosxFazendas = (await import('../models/UsuariosxFazendas.js')).default;
       const FazendasxCativeiros = (await import('../models/FazendasxCativeiros.js')).default;
       const Cativeiros = (await import('../models/Cativeiros.js')).default;
-      const fazendasDoUsuario = await UsuariosxFazendas.find({ usuario: usuarioId }).populate('fazenda');
+      
+      const fazendasDoUsuario = await UsuariosxFazendas.find({ usuario: usuarioId }).populate('fazenda').lean();
       const fazendaIds = fazendasDoUsuario.map(f => f.fazenda._id || f.fazenda);
-      // Buscar cativeiros dessas fazendas
-      const rels = await FazendasxCativeiros.find({ fazenda: { $in: fazendaIds } }, 'cativeiro fazenda').populate('fazenda');
+      
+      if (fazendaIds.length === 0) return [];
+      
+      // OTIMIZAÇÃO: Buscar relacionamentos uma vez e extrair IDs
+      const rels = await FazendasxCativeiros.find({ fazenda: { $in: fazendaIds } }, 'cativeiro fazenda').populate('fazenda').lean();
       const cativeiroIds = rels.map(r => r.cativeiro);
-      // Buscar dados completos dos cativeiros, populando tipo de camarão e condições ideais
+      
+      if (cativeiroIds.length === 0) return [];
+      
+      // Buscar cativeiros em paralelo com os relacionamentos já obtidos
       const cativeiros = await Cativeiros.find({ _id: { $in: cativeiroIds } })
         .populate('id_tipo_camarao')
-        .populate('condicoes_ideais');
+        .populate('condicoes_ideais')
+        .lean();
+      
+      // Criar mapa de relacionamentos para acesso O(1)
+      const relsMap = new Map();
+      rels.forEach(rel => {
+        if (rel.cativeiro && rel.fazenda) {
+          relsMap.set(rel.cativeiro.toString(), rel.fazenda);
+        }
+      });
       
       // Anexar dados da fazenda a cada cativeiro
       const cativeirosComFazenda = cativeiros.map(cativeiro => {
-        const cativeiroObj = cativeiro.toObject();
-        const relacao = rels.find(r => r.cativeiro.toString() === cativeiro._id.toString());
-        if (relacao && relacao.fazenda) {
-          cativeiroObj.fazenda = relacao.fazenda._id;
-          cativeiroObj.fazendaNome = relacao.fazenda.nome;
-          cativeiroObj.fazendaCodigo = relacao.fazenda.codigo;
+        const fazenda = relsMap.get(cativeiro._id.toString());
+        if (fazenda) {
+          cativeiro.fazenda = fazenda._id || fazenda;
+          cativeiro.fazendaNome = fazenda.nome;
+          cativeiro.fazendaCodigo = fazenda.codigo;
         }
-        return cativeiroObj;
+        return cativeiro;
       });
       
       return cativeirosComFazenda;
