@@ -3,12 +3,17 @@ import mongoose from "mongoose";
 const UsuariosxFazendasSchema = new mongoose.Schema({
   usuario: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Users",
+    ref: "User",
     required: true
   },
   fazenda: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Fazendas",
+    required: true
+  },
+  ativo: {
+    type: Boolean,
+    default: true,
     required: true
   }
 });

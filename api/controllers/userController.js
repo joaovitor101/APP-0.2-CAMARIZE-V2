@@ -358,15 +358,30 @@ const associarFuncionario = async (req, res) => {
     });
 
     if (relExists) {
+      // Se já existe mas está inativo, reativar
+      if (relExists.ativo === false) {
+        await UsuariosxFazendas.updateOne(
+          { _id: relExists._id },
+          { $set: { ativo: true } }
+        );
+        return res.status(200).json({ 
+          message: `Funcionário '${funcionario.email}' foi reativado na sua fazenda.`,
+          fazenda: {
+            id: fazendaId,
+            nome: relAdminFazenda.fazenda.nome || 'N/A'
+          }
+        });
+      }
       return res.status(400).json({ 
         error: `Funcionário já está associado à fazenda '${relAdminFazenda.fazenda.nome || fazendaId}'` 
       });
     }
 
-    // Criar relacionamento
+    // Criar relacionamento (ativo por padrão)
     await UsuariosxFazendas.create({ 
       usuario: funcionario._id, 
-      fazenda: fazendaId 
+      fazenda: fazendaId,
+      ativo: true
     });
 
     console.log(`✅ Admin ${admin.email} associou funcionário ${funcionario.email} à fazenda ${fazendaId}`);
@@ -389,6 +404,210 @@ const associarFuncionario = async (req, res) => {
   }
 };
 
+// Listar funcionários associados à fazenda do admin
+const getFuncionariosDaFazenda = async (req, res) => {
+  try {
+    const adminId = req.loggedUser?.id;
+    
+    console.log('🔍 [GET FUNCIONARIOS] AdminId:', adminId);
+    
+    if (!adminId) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    // Buscar o admin logado
+    const admin = await userService.getById(adminId);
+    if (!admin) {
+      console.log('❌ [GET FUNCIONARIOS] Admin não encontrado');
+      return res.status(404).json({ error: 'Admin não encontrado' });
+    }
+
+    console.log('✅ [GET FUNCIONARIOS] Admin encontrado:', admin.email, 'Role:', admin.role);
+
+    // Verificar se é admin
+    if (admin.role !== 'admin') {
+      return res.status(403).json({ error: 'Apenas admins podem ver funcionários da fazenda' });
+    }
+
+    // Buscar a fazenda do admin
+    const mongoose = (await import('mongoose')).default;
+    
+    // Tentar buscar com ObjectId e string
+    let relAdminFazenda = null;
+    if (mongoose.Types.ObjectId.isValid(adminId)) {
+      const adminIdObj = new mongoose.Types.ObjectId(adminId);
+      relAdminFazenda = await UsuariosxFazendas.findOne({ usuario: adminIdObj }).populate('fazenda').lean();
+      console.log('🔍 [GET FUNCIONARIOS] Busca com ObjectId - relação encontrada:', !!relAdminFazenda);
+      
+      if (!relAdminFazenda) {
+        relAdminFazenda = await UsuariosxFazendas.findOne({ usuario: adminId }).populate('fazenda').lean();
+        console.log('🔍 [GET FUNCIONARIOS] Busca com string (fallback) - relação encontrada:', !!relAdminFazenda);
+      }
+    } else {
+      relAdminFazenda = await UsuariosxFazendas.findOne({ usuario: adminId }).populate('fazenda').lean();
+      console.log('🔍 [GET FUNCIONARIOS] Busca com string - relação encontrada:', !!relAdminFazenda);
+    }
+    
+    if (!relAdminFazenda || !relAdminFazenda.fazenda) {
+      console.log('⚠️ [GET FUNCIONARIOS] Admin não possui fazenda associada');
+      return res.status(400).json({ error: 'Admin não possui fazenda associada.' });
+    }
+
+    const fazendaId = relAdminFazenda.fazenda._id || relAdminFazenda.fazenda;
+    console.log('✅ [GET FUNCIONARIOS] Fazenda encontrada:', fazendaId, 'Nome:', relAdminFazenda.fazenda.nome);
+
+    // Buscar todos os funcionários (membros) associados à fazenda
+    // Tentar com ObjectId e string
+    let rels = [];
+    if (mongoose.Types.ObjectId.isValid(fazendaId)) {
+      const fazendaIdObj = new mongoose.Types.ObjectId(fazendaId);
+      rels = await UsuariosxFazendas.find({ fazenda: fazendaIdObj })
+        .populate('usuario')
+        .lean();
+      console.log('🔍 [GET FUNCIONARIOS] Busca funcionários com ObjectId - encontradas', rels.length, 'relações');
+      
+      if (rels.length === 0) {
+        rels = await UsuariosxFazendas.find({ fazenda: fazendaId })
+          .populate('usuario')
+          .lean();
+        console.log('🔍 [GET FUNCIONARIOS] Busca funcionários com string (fallback) - encontradas', rels.length, 'relações');
+      }
+    } else {
+      rels = await UsuariosxFazendas.find({ fazenda: fazendaId })
+        .populate('usuario')
+        .lean();
+      console.log('🔍 [GET FUNCIONARIOS] Busca funcionários com string - encontradas', rels.length, 'relações');
+    }
+
+    // Filtrar apenas membros e formatar resposta
+    const funcionarios = rels
+      .filter(rel => {
+        const hasUsuario = rel.usuario && (rel.usuario._id || rel.usuario);
+        const isMembro = rel.usuario && rel.usuario.role === 'membro';
+        return hasUsuario && isMembro;
+      })
+      .map(rel => ({
+        id: String(rel.usuario._id || rel.usuario),
+        nome: rel.usuario.nome,
+        email: rel.usuario.email,
+        foto_perfil: rel.usuario.foto_perfil,
+        role: rel.usuario.role,
+        ativo: rel.ativo !== undefined ? rel.ativo : true // Default true para compatibilidade
+      }));
+
+    console.log('✅ [GET FUNCIONARIOS] Retornando', funcionarios.length, 'funcionários');
+    return res.status(200).json(funcionarios);
+  } catch (error) {
+    console.error('❌ [GET FUNCIONARIOS] Erro:', error);
+    res.status(500).json({ error: 'Erro ao buscar funcionários da fazenda.' });
+  }
+};
+
+// Atualizar status ativo/inativo do funcionário na fazenda
+const atualizarStatusFuncionario = async (req, res) => {
+  try {
+    const { funcionarioId, ativo } = req.body;
+    const adminId = req.loggedUser?.id;
+
+    console.log('🔍 [ATUALIZAR STATUS FUNCIONARIO] FuncionarioId:', funcionarioId, 'Ativo:', ativo, 'AdminId:', adminId);
+
+    if (!funcionarioId || ativo === undefined) {
+      return res.status(400).json({ error: 'ID do funcionário e status (ativo) são obrigatórios' });
+    }
+
+    if (!adminId) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    // Buscar o admin logado
+    const admin = await userService.getById(adminId);
+    if (!admin) {
+      return res.status(404).json({ error: 'Admin não encontrado' });
+    }
+
+    // Verificar se é admin
+    if (admin.role !== 'admin') {
+      return res.status(403).json({ error: 'Apenas admins podem atualizar status de funcionários' });
+    }
+
+    // Buscar a fazenda do admin
+    const mongoose = (await import('mongoose')).default;
+    
+    let relAdminFazenda = null;
+    if (mongoose.Types.ObjectId.isValid(adminId)) {
+      const adminIdObj = new mongoose.Types.ObjectId(adminId);
+      relAdminFazenda = await UsuariosxFazendas.findOne({ usuario: adminIdObj }).populate('fazenda').lean();
+      
+      if (!relAdminFazenda) {
+        relAdminFazenda = await UsuariosxFazendas.findOne({ usuario: adminId }).populate('fazenda').lean();
+      }
+    } else {
+      relAdminFazenda = await UsuariosxFazendas.findOne({ usuario: adminId }).populate('fazenda').lean();
+    }
+    
+    if (!relAdminFazenda || !relAdminFazenda.fazenda) {
+      return res.status(400).json({ error: 'Admin não possui fazenda associada.' });
+    }
+
+    const fazendaId = relAdminFazenda.fazenda._id || relAdminFazenda.fazenda;
+
+    // Verificar se o funcionário está associado à fazenda do admin
+    let relFuncionario = null;
+    if (mongoose.Types.ObjectId.isValid(funcionarioId)) {
+      const funcionarioIdObj = new mongoose.Types.ObjectId(funcionarioId);
+      relFuncionario = await UsuariosxFazendas.findOne({ 
+        usuario: funcionarioIdObj, 
+        fazenda: fazendaId 
+      }).lean();
+      
+      if (!relFuncionario) {
+        relFuncionario = await UsuariosxFazendas.findOne({ 
+          usuario: funcionarioId, 
+          fazenda: fazendaId 
+        }).lean();
+      }
+    } else {
+      relFuncionario = await UsuariosxFazendas.findOne({ 
+        usuario: funcionarioId, 
+        fazenda: fazendaId 
+      }).lean();
+    }
+
+    if (!relFuncionario) {
+      return res.status(404).json({ error: 'Funcionário não está associado à sua fazenda.' });
+    }
+
+    // Verificar se não é o próprio admin tentando se desativar
+    if (String(funcionarioId) === String(adminId) && !ativo) {
+      return res.status(400).json({ error: 'Você não pode desativar a si mesmo da fazenda.' });
+    }
+
+    // Converter _id para ObjectId se necessário
+    const relId = mongoose.Types.ObjectId.isValid(relFuncionario._id) 
+      ? new mongoose.Types.ObjectId(relFuncionario._id) 
+      : relFuncionario._id;
+    
+    // Atualizar o status ativo/inativo
+    const updateResult = await UsuariosxFazendas.updateOne(
+      { _id: relId },
+      { $set: { ativo: ativo === true } }
+    );
+    
+    console.log(`✅ [ATUALIZAR STATUS FUNCIONARIO] Funcionário ${ativo ? 'ativado' : 'desativado'} com sucesso`);
+
+    // Verificar se a atualização foi bem-sucedida
+    const relAtualizada = await UsuariosxFazendas.findById(relId).lean();
+
+    return res.status(200).json({ 
+      message: `Funcionário ${ativo ? 'ativado' : 'desativado'} com sucesso!`,
+      ativo: relAtualizada?.ativo
+    });
+  } catch (error) {
+    console.error('❌ [ATUALIZAR STATUS FUNCIONARIO] Erro:', error);
+    res.status(500).json({ error: 'Erro ao atualizar status do funcionário.' });
+  }
+};
+
 export default { 
   createUser, 
   loginUser, 
@@ -403,5 +622,7 @@ export default {
   getCurrentUser, 
   listUsers, 
   listMasters, 
-  changeUserRole 
+  changeUserRole,
+  getFuncionariosDaFazenda,
+  atualizarStatusFuncionario
 };

@@ -57,7 +57,7 @@ class RequestService {
           });
           
           if (!relExists) {
-            await UsuariosxFazendas.create({ usuario: user._id, fazenda: fazendaDoc._id });
+            await UsuariosxFazendas.create({ usuario: user._id, fazenda: fazendaDoc._id, ativo: true });
             console.log('✅ [APPROVE PROPRIETARIO] Relação usuário-fazenda criada');
           } else {
             console.log('⚠️ [APPROVE PROPRIETARIO] Relação já existe');
@@ -101,7 +101,7 @@ class RequestService {
         // Criar relacionamento usuário-fazenda se não existir
         const relExists = await UsuariosxFazendas.findOne({ usuario: user._id, fazenda: fazendaId });
         if (!relExists) {
-          await UsuariosxFazendas.create({ usuario: user._id, fazenda: fazendaId });
+          await UsuariosxFazendas.create({ usuario: user._id, fazenda: fazendaId, ativo: true });
           console.log(`✅ Funcionário ${user.email} associado à fazenda ${fazendaId}`);
         } else {
           console.log(`⚠️ Funcionário ${user.email} já está associado à fazenda ${fazendaId}`);
@@ -138,7 +138,7 @@ class RequestService {
           user = await userService.Create(nome, email, senha, foto_perfil, fazendaId, 'membro');
 
           // Criar relacionamento usuário-fazenda
-          await UsuariosxFazendas.create({ usuario: user._id, fazenda: fazendaId });
+          await UsuariosxFazendas.create({ usuario: user._id, fazenda: fazendaId, ativo: true });
 
           // Atualizar requesterUser na solicitação
           request.requesterUser = user._id;
@@ -146,7 +146,7 @@ class RequestService {
           // Se usuário já existe, apenas criar o relacionamento se não existir
           const relExists = await UsuariosxFazendas.findOne({ usuario: user._id, fazenda: fazendaId });
           if (!relExists) {
-            await UsuariosxFazendas.create({ usuario: user._id, fazenda: fazendaId });
+            await UsuariosxFazendas.create({ usuario: user._id, fazenda: fazendaId, ativo: true });
           }
         }
       } catch (error) {

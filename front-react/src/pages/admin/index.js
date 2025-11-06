@@ -21,6 +21,7 @@ export default function AdminPanel() {
   const [sensores, setSensores] = useState([]); // mantemos carregado para futuras funcionalidades
   const [previewImage, setPreviewImage] = useState({});  // cativeiroId -> imageUrl
   const [showSwapModal, setShowSwapModal] = useState(false);
+  const [funcionarios, setFuncionarios] = useState([]);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const fileInputRef = useRef(null);
   const [uploadTargetCativeiro, setUploadTargetCativeiro] = useState(null);
@@ -143,7 +144,7 @@ export default function AdminPanel() {
       setError('');
       const token = getToken();
       const headers = { Authorization: `Bearer ${token}` };
-      const [reqs, fzs, cats, tipos, condicoes, sens, us] = await Promise.all([
+      const [reqs, fzs, cats, tipos, condicoes, sens, us, funcs] = await Promise.all([
         axios.get(`${apiUrl}/requests`, { headers }),
         axios.get(`${apiUrl}/fazendas`, { headers }),
         axios.get(`${apiUrl}/cativeiros`, { headers }),
@@ -151,6 +152,7 @@ export default function AdminPanel() {
         axios.get(`${apiUrl}/condicoes-ideais`, { headers }),
         axios.get(`${apiUrl}/sensores`, { headers }),
         axios.get(`${apiUrl}/users/masters/all`, { headers }).catch(() => ({ data: [] })),
+        axios.get(`${apiUrl}/users/funcionarios/fazenda`, { headers }).catch(() => ({ data: [] })),
       ]);
       setItems(reqs.data);
       setFazendas(fzs.data);
@@ -159,6 +161,7 @@ export default function AdminPanel() {
       setCondicoesIdeais(condicoes.data);
       setSensores(sens.data);
       setUsers(us.data || []);
+      setFuncionarios(funcs.data || []);
     } catch (e) {
       console.error('Erro ao carregar dados:', e);
       const errorMessage = e?.response?.data?.error || e?.message || 'Erro ao carregar dados';
@@ -774,6 +777,7 @@ export default function AdminPanel() {
         <button onClick={() => setTab('requests')} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: tab==='requests'?'#eef':'#fff' }}>Requests</button>
         <button onClick={() => setTab('solicitacoes')} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: tab==='solicitacoes'?'#eef':'#fff' }}>Solicitações</button>
         <button onClick={() => setTab('cativeiros')} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: tab==='cativeiros'?'#eef':'#fff' }}>Cativeiros</button>
+        <button onClick={() => setTab('funcionarios')} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: tab==='funcionarios'?'#eef':'#fff' }}>Funcionários</button>
         <button onClick={() => { setTab('chat'); loadConversationsOnce(); }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: tab==='chat'?'#eef':'#fff' }}>Chat</button>
       </div>
 
@@ -1410,6 +1414,198 @@ export default function AdminPanel() {
               )}
             </div>
           ))}
+        </section>
+      )}
+
+      {tab === 'funcionarios' && (
+        <section>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3>Funcionários Associados à Fazenda</h3>
+            <button
+              onClick={() => {
+                setFuncionarioEmail('');
+                setShowAssociarFuncionarioModal(true);
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              Associar Funcionário
+            </button>
+          </div>
+
+          {funcionarios.length === 0 ? (
+            <div style={{ 
+              padding: '40px', 
+              textAlign: 'center', 
+              background: '#f9fafb', 
+              borderRadius: 8,
+              border: '1px solid #e5e7eb'
+            }}>
+              <p style={{ color: '#6b7280', margin: 0 }}>
+                Nenhum funcionário associado à fazenda ainda.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {funcionarios.map((funcionario) => (
+                <div
+                  key={funcionario.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '16px',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 8,
+                    background: '#fff'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                    {/* Foto do perfil ou inicial */}
+                    <div
+                      style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '50%',
+                        background: funcionario.foto_perfil 
+                          ? `url(${funcionario.foto_perfil}) center/cover`
+                          : '#10b981',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontWeight: '600',
+                        fontSize: '18px',
+                        flexShrink: 0
+                      }}
+                    >
+                      {!funcionario.foto_perfil && (funcionario.nome?.[0]?.toUpperCase() || 'F')}
+                    </div>
+
+                    {/* Informações do funcionário */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: '600', 
+                        fontSize: '16px',
+                        color: '#111827',
+                        marginBottom: '4px'
+                      }}>
+                        {funcionario.nome || 'Sem nome'}
+                      </div>
+                      <div style={{ 
+                        fontSize: '14px', 
+                        color: '#6b7280',
+                        wordBreak: 'break-word'
+                      }}>
+                        {funcionario.email}
+                      </div>
+                      <div style={{ 
+                        fontSize: '12px', 
+                        color: '#9ca3af',
+                        marginTop: '4px'
+                      }}>
+                        Funcionário
+                      </div>
+                    </div>
+
+                    {/* Toggle Ativo/Inativo */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div
+                        style={{
+                          padding: '6px 12px',
+                          background: funcionario.ativo ? '#d1fae5' : '#fee2e2',
+                          color: funcionario.ativo ? '#065f46' : '#991b1b',
+                          borderRadius: 20,
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {funcionario.ativo ? 'Ativo' : 'Inativo'}
+                      </div>
+                      <div
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const novoStatus = !funcionario.ativo;
+                          
+                          try {
+                            const token = getToken();
+                            const headers = { Authorization: `Bearer ${token}` };
+                            const response = await axios.post(
+                              `${apiUrl}/users/funcionarios/atualizar-status`,
+                              { 
+                                funcionarioId: String(funcionario.id),
+                                ativo: novoStatus
+                              },
+                              { headers }
+                            );
+                            
+                            // Atualizar estado local com o valor retornado do servidor
+                            const statusAtualizado = response.data?.ativo !== undefined ? response.data.ativo : novoStatus;
+                            setFuncionarios(prev => 
+                              prev.map(f => 
+                                String(f.id) === String(funcionario.id)
+                                  ? { ...f, ativo: statusAtualizado }
+                                  : f
+                              )
+                            );
+                          } catch (error) {
+                            const errorMsg = error?.response?.data?.error || error.message || 'Erro desconhecido';
+                            alert('Erro ao atualizar status: ' + errorMsg);
+                          }
+                        }}
+                        style={{
+                          width: '50px',
+                          height: '26px',
+                          borderRadius: '13px',
+                          background: funcionario.ativo ? '#10b981' : '#9ca3af',
+                          position: 'relative',
+                          cursor: 'pointer',
+                          transition: 'background 0.3s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '2px'
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '22px',
+                            height: '22px',
+                            borderRadius: '50%',
+                            background: 'white',
+                            transition: 'transform 0.3s',
+                            transform: funcionario.ativo ? 'translateX(24px)' : 'translateX(0)',
+                            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {funcionarios.length > 0 && (
+            <div style={{ 
+              marginTop: '20px', 
+              padding: '12px', 
+              background: '#f0f9ff', 
+              borderRadius: 8,
+              border: '1px solid #bae6fd',
+              fontSize: '13px',
+              color: '#0369a1'
+            }}>
+              Total de funcionários associados: <strong>{funcionarios.length}</strong>
+            </div>
+          )}
         </section>
       )}
 

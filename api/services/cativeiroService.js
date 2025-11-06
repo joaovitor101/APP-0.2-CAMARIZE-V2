@@ -129,7 +129,15 @@ class cativeiroService {
       const FazendasxCativeiros = (await import('../models/FazendasxCativeiros.js')).default;
       const Cativeiros = (await import('../models/Cativeiros.js')).default;
       
-      const fazendasDoUsuario = await UsuariosxFazendas.find({ usuario: usuarioId }).populate('fazenda').lean();
+      // Buscar apenas relacionamentos ATIVOS (ativo === true ou undefined para compatibilidade)
+      const fazendasDoUsuario = await UsuariosxFazendas.find({ 
+        usuario: usuarioId,
+        $or: [
+          { ativo: true },
+          { ativo: { $exists: false } } // Compatibilidade com registros antigos sem campo ativo
+        ]
+      }).populate('fazenda').lean();
+      
       const fazendaIds = fazendasDoUsuario.map(f => f.fazenda._id || f.fazenda);
       
       if (fazendaIds.length === 0) return [];

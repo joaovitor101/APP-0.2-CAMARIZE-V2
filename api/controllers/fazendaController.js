@@ -33,7 +33,7 @@ const createFazenda = async (req, res) => {
     
     // Cria o relacionamento na tabela intermediária
     console.log("🔗 [FAZENDA] Criando relacionamento usuário-fazenda...");
-    await UsuariosxFazendas.create({ usuario: usuarioId, fazenda: result._id });
+    await UsuariosxFazendas.create({ usuario: usuarioId, fazenda: result._id, ativo: true });
     console.log("✅ [FAZENDA] Relacionamento criado");
     
     res.status(201).json({ message: "Fazenda criada com sucesso!" });
@@ -75,19 +75,36 @@ const getAllFazendas = async (req, res) => {
       
       try {
         // Tentar buscar com ObjectId se for uma string válida
+        // Filtrar apenas relacionamentos ATIVOS
+        const filtroAtivo = {
+          $or: [
+            { ativo: true },
+            { ativo: { $exists: false } } // Compatibilidade com registros antigos sem campo ativo
+          ]
+        };
+        
         if (mongoose.Types.ObjectId.isValid(usuarioId)) {
           const userIdObj = new mongoose.Types.ObjectId(usuarioId);
-          rels = await UsuariosxFazendas.find({ usuario: userIdObj }).populate('fazenda').lean();
+          rels = await UsuariosxFazendas.find({ 
+            usuario: userIdObj,
+            ...filtroAtivo
+          }).populate('fazenda').lean();
           console.log('🔍 [GET ALL FAZENDAS] Busca com ObjectId - encontradas', rels?.length || 0, 'relações');
           
           // Se não encontrou com ObjectId, tentar também como string (caso o banco tenha salvo como string)
           if (!rels || rels.length === 0) {
-            rels = await UsuariosxFazendas.find({ usuario: usuarioId }).populate('fazenda').lean();
+            rels = await UsuariosxFazendas.find({ 
+              usuario: usuarioId,
+              ...filtroAtivo
+            }).populate('fazenda').lean();
             console.log('🔍 [GET ALL FAZENDAS] Busca com string (fallback) - encontradas', rels?.length || 0, 'relações');
           }
         } else {
           // Tentar buscar como string também
-          rels = await UsuariosxFazendas.find({ usuario: usuarioId }).populate('fazenda').lean();
+          rels = await UsuariosxFazendas.find({ 
+            usuario: usuarioId,
+            ...filtroAtivo
+          }).populate('fazenda').lean();
           console.log('🔍 [GET ALL FAZENDAS] Busca com string - encontradas', rels?.length || 0, 'relações');
         }
       } catch (searchError) {
@@ -115,7 +132,8 @@ const getAllFazendas = async (req, res) => {
               if (!relExists) {
                 await UsuariosxFazendas.create({ 
                   usuario: mongoose.Types.ObjectId.isValid(usuarioId) ? new mongoose.Types.ObjectId(usuarioId) : usuarioId,
-                  fazenda: user.fazenda 
+                  fazenda: user.fazenda,
+                  ativo: true
                 });
                 console.log('✅ [GET ALL FAZENDAS] Relação criada automaticamente');
                 

@@ -41,4 +41,10 @@ userRoutes.patch('/:id/role', Auth.Authorization, Auth.RequireRole(['master']), 
 // Associar funcionário à fazenda do admin (somente admin)
 userRoutes.post('/associar-funcionario', Auth.Authorization, Auth.RequireRole(['admin']), userController.associarFuncionario);
 
+// Listar funcionários da fazenda do admin (somente admin)
+userRoutes.get('/funcionarios/fazenda', Auth.Authorization, Auth.RequireRole(['admin']), userController.getFuncionariosDaFazenda);
+
+// Atualizar status ativo/inativo do funcionário na fazenda (somente admin)
+userRoutes.post('/funcionarios/atualizar-status', Auth.Authorization, Auth.RequireRole(['admin']), userController.atualizarStatusFuncionario);
+
 export default userRoutes;
