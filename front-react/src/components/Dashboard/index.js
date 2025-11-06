@@ -238,14 +238,27 @@ export default function Dashboard() {
           <span style={{ color: "#7be6c3" }}>■ Amônia</span>
         </div>
       </div>
-      <RequestButton 
+      <button 
         className={styles.relatorioBtn}
-        labelWhenAllowed="Relatório Individual Detalhado"
-        labelWhenRequest="Solicitar Relatório"
-        action="relatorio_individual"
-        payload={{ cativeiroId: id, periodo: selectedPeriodo || 'semana' }}
-        onSuccess={() => handleRelatorioClick()}
-      />
+        onClick={handleRelatorioClick}
+        style={{
+          background: 'linear-gradient(90deg, #f7b0b7 0%, #a3c7f7 100%)',
+          border: 'none',
+          padding: '12px 24px',
+          borderRadius: '8px',
+          color: '#1f2937',
+          fontWeight: '600',
+          cursor: 'pointer',
+          fontSize: '16px',
+          transition: 'all 0.3s ease',
+          width: '100%',
+          maxWidth: '300px',
+          margin: '0 auto',
+          display: 'block'
+        }}
+      >
+        Solicitar Relatório
+      </button>
       <nav className={styles.navBottom}>
         <button onClick={() => router.push('/home')}><img src="/images/home.svg" alt="Home" /></button>
         <button onClick={() => router.push('/settings')}><img src="/images/settings.svg" alt="Settings" /></button>
@@ -306,8 +319,7 @@ export default function Dashboard() {
           flexDirection: 'column',
           gap: '12px'
         }}>
-          <button 
-            onClick={() => handlePeriodoSelect('dia')}
+          <RequestButton
             style={{
               padding: '16px 20px',
               borderRadius: '12px',
@@ -317,26 +329,25 @@ export default function Dashboard() {
               fontWeight: '600',
               cursor: 'pointer',
               fontSize: '16px',
-              transition: 'all 0.3s ease',
+              width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between'
             }}
-            onMouseOver={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 8px 25px rgba(247, 176, 183, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = 'none';
-            }}
+            className={styles.relatorioBtn}
+            labelWhenAllowed="Relatório Individual Detalhado"
+            labelWhenRequest="📅 Relatório Diário"
+            action="relatorio_individual"
+            payload={{ cativeiroId: id, periodo: 'dia' }}
+            onSuccess={() => handleCloseModal()}
           >
-            <span>📅 Relatório Diário</span>
-            <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimas 24h</span>
-          </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span>📅 Relatório Diário</span>
+              <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimas 24h</span>
+            </div>
+          </RequestButton>
 
-          <button 
-            onClick={() => handlePeriodoSelect('semana')}
+          <RequestButton
             style={{
               padding: '16px 20px',
               borderRadius: '12px',
@@ -346,26 +357,25 @@ export default function Dashboard() {
               fontWeight: '600',
               cursor: 'pointer',
               fontSize: '16px',
-              transition: 'all 0.3s ease',
+              width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between'
             }}
-            onMouseOver={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 8px 25px rgba(247, 176, 183, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = 'none';
-            }}
+            className={styles.relatorioBtn}
+            labelWhenAllowed="Relatório Individual Detalhado"
+            labelWhenRequest="📊 Relatório Semanal"
+            action="relatorio_individual"
+            payload={{ cativeiroId: id, periodo: 'semana' }}
+            onSuccess={() => handleCloseModal()}
           >
-            <span>📊 Relatório Semanal</span>
-            <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimos 7 dias</span>
-          </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span>📊 Relatório Semanal</span>
+              <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimos 7 dias</span>
+            </div>
+          </RequestButton>
 
-          <button 
-            onClick={() => handlePeriodoSelect('mes')}
+          <RequestButton
             style={{
               padding: '16px 20px',
               borderRadius: '12px',
@@ -375,23 +385,23 @@ export default function Dashboard() {
               fontWeight: '600',
               cursor: 'pointer',
               fontSize: '16px',
-              transition: 'all 0.3s ease',
+              width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between'
             }}
-            onMouseOver={(e) => {
-              e.target.style.transform = 'translateY(-2px)';
-              e.target.style.boxShadow = '0 8px 25px rgba(247, 176, 183, 0.4)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = 'none';
-            }}
+            className={styles.relatorioBtn}
+            labelWhenAllowed="Relatório Individual Detalhado"
+            labelWhenRequest="📈 Relatório Mensal"
+            action="relatorio_individual"
+            payload={{ cativeiroId: id, periodo: 'mes' }}
+            onSuccess={() => handleCloseModal()}
           >
-            <span>📈 Relatório Mensal</span>
-            <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimos 30 dias</span>
-          </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span>📈 Relatório Mensal</span>
+              <span style={{ fontSize: '14px', opacity: 0.9 }}>Últimos 30 dias</span>
+            </div>
+          </RequestButton>
         </div>
       </Modal>
     </div>
