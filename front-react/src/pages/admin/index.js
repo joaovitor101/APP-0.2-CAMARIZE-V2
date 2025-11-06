@@ -83,26 +83,43 @@ export default function AdminPanel() {
 
   // Deriva o tipo do sensor a partir de múltiplas fontes
   const getSensorType = (sensor) => {
-    // 1) direto do objeto
-    const direct = String(sensor && sensor.id_tipo_sensor || sensor && sensor.tipo || '').toLowerCase();
-    if (direct) return direct;
-    // 2) lookup pelo id (string ou objeto)
-    const sid = typeof sensor === 'string' ? sensor : (sensor?._id || sensor?.id);
-    if (sid) {
-      const full = (sensores || []).find(x => String(x._id) === String(sid));
-      const fromLookup = String(full?.id_tipo_sensor || '').toLowerCase();
-      if (fromLookup) return fromLookup;
-      // 3) heurística pelo apelido
-      const alias = String(full?.apelido || '').toLowerCase();
-      if (alias.includes('temp')) return 'temperatura';
-      if (alias.includes('ph')) return 'ph';
-      if (alias.includes('amonia') || alias.includes('nh3')) return 'amonia';
+    // 1) Se o sensor vier populado com id_tipo_sensor como objeto, usar descricao/nome
+    try {
+      if (!sensor) return '';
+      if (typeof sensor.id_tipo_sensor === 'object' && sensor.id_tipo_sensor) {
+        const desc = sensor.id_tipo_sensor.descricao || sensor.id_tipo_sensor.nome;
+        if (desc) return String(desc).toLowerCase();
+      }
+      // 2) direto do campo (string) ou campo alternativo 'tipo'
+      const directField = sensor.id_tipo_sensor || sensor.tipo;
+      if (typeof directField === 'string' && directField.trim()) return directField.toLowerCase();
+
+      // 3) lookup pelo id (quando `sensor` é id ou objeto com _id)
+      const sid = typeof sensor === 'string' ? sensor : (sensor?._id || sensor?.id);
+      if (sid) {
+        const full = (sensores || []).find(x => String(x._id) === String(sid));
+        if (full) {
+          if (typeof full.id_tipo_sensor === 'object' && full.id_tipo_sensor) {
+            const d = full.id_tipo_sensor.descricao || full.id_tipo_sensor.nome;
+            if (d) return String(d).toLowerCase();
+          }
+          if (typeof full.id_tipo_sensor === 'string' && full.id_tipo_sensor.trim()) return full.id_tipo_sensor.toLowerCase();
+          const alias = String(full?.apelido || '').toLowerCase();
+          if (alias.includes('temp')) return 'temperatura';
+          if (alias.includes('ph')) return 'ph';
+          if (alias.includes('amonia') || alias.includes('nh3')) return 'amonia';
+        }
+      }
+
+      // 4) heurística pelo próprio apelido no objeto parcial
+      const aliasLocal = String(sensor && sensor.apelido || '').toLowerCase();
+      if (aliasLocal.includes('temp')) return 'temperatura';
+      if (aliasLocal.includes('ph')) return 'ph';
+      if (aliasLocal.includes('amonia') || aliasLocal.includes('nh3')) return 'amonia';
+    } catch (e) {
+      // se algo falhar, devolve string vazia para evitar mostrar [object Object]
+      return '';
     }
-    // 4) heurística pelo próprio apelido no objeto parcial
-    const aliasLocal = String(sensor && sensor.apelido || '').toLowerCase();
-    if (aliasLocal.includes('temp')) return 'temperatura';
-    if (aliasLocal.includes('ph')) return 'ph';
-    if (aliasLocal.includes('amonia') || aliasLocal.includes('nh3')) return 'amonia';
     return '';
   };
 
@@ -406,10 +423,14 @@ export default function AdminPanel() {
       );
     }
     if (action === 'editar_sensor') {
+      // Mostrar tipo e apelido do sensor quando disponível em `sensores`
+      const sensorMatch = (sensores || []).find(s => String(s._id) === String(payload?.id) || String(s.id) === String(payload?.id));
+      const tipo = sensorMatch ? (typeof sensorMatch.id_tipo_sensor === 'object' ? sensorMatch.id_tipo_sensor.descricao || sensorMatch.id_tipo_sensor.nome : sensorMatch.id_tipo_sensor) : null;
+      const apelido = sensorMatch ? (sensorMatch.apelido || '') : (payload?.apelido || 'N/A');
       return (
         <div style={{ background: '#f8fafc', padding: 12, borderRadius: 6, marginTop: 8, border: '1px solid #e2e8f0' }}>
-          <div><strong>Sensor ID:</strong> {payload?.id || 'N/A'}</div>
-          <div><strong>Novo Apelido:</strong> {payload?.apelido || 'N/A'}</div>
+          <div><strong>Sensor:</strong> {tipo ? `${tipo} | ${apelido}` : (payload?.apelido || payload?.id || 'N/A')}</div>
+          {payload?.apelido && <div><strong>Novo Apelido:</strong> {payload.apelido}</div>}
         </div>
       );
     }
@@ -978,7 +999,7 @@ export default function AdminPanel() {
                             )}
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
                               {(() => {
-                                const tiposAtuais = new Set((cativeiro.sensores || []).map(s => String(s.id_tipo_sensor || '').toLowerCase()));
+                                const tiposAtuais = new Set((cativeiro.sensores || []).map(s => getSensorType(s)).filter(Boolean));
                                 const allHave = tiposAtuais.has('temperatura') && tiposAtuais.has('ph') && tiposAtuais.has('amonia');
                                 return (
                                   <button

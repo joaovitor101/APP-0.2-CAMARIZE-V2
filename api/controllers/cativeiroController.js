@@ -357,11 +357,18 @@ const getAllCondicoesIdeais = async (req, res) => {
 const getSensoresCativeiro = async (req, res) => {
   try {
     const { cativeiroId } = req.params;
+    // Popula id_sensor e também o id_tipo_sensor interno para que o frontend receba
+    // a descrição do tipo do sensor (TiposSensor.descricao)
     const sensores = await SensoresxCativeiros.find({ id_cativeiro: cativeiroId })
-      .populate('id_sensor')
+      .populate({
+        path: 'id_sensor',
+        populate: { path: 'id_tipo_sensor', model: 'TiposSensor' }
+      })
       .populate('id_cativeiro');
+
     res.status(200).json(sensores);
   } catch (error) {
+    console.error('Erro ao buscar sensores do cativeiro:', error);
     res.status(500).json({ error: "Erro ao buscar sensores do cativeiro." });
   }
 };

@@ -388,6 +388,10 @@ export default function MasterPanel() {
         </div>
       );
     } else if (action === 'editar_sensor') {
+      // Mostrar tipo e apelido do sensor em vez do _id
+      const sensorMatch = (sensores || []).find(s => String(s._id) === String(payload.id) || String(s.id) === String(payload.id));
+      const tipo = sensorMatch ? (typeof sensorMatch.id_tipo_sensor === 'object' ? sensorMatch.id_tipo_sensor.descricao : sensorMatch.id_tipo_sensor) : null;
+      const apelido = sensorMatch ? (sensorMatch.apelido || '') : (payload.apelido || 'N/A');
       return (
         <div style={{ 
           background: '#f8fafc', 
@@ -396,8 +400,8 @@ export default function MasterPanel() {
           marginTop: 8,
           border: '1px solid #e2e8f0'
         }}>
-          <div><strong>Sensor ID:</strong> {payload.id || 'N/A'}</div>
-          <div><strong>Novo Apelido:</strong> {payload.apelido || 'N/A'}</div>
+          <div><strong>Sensor:</strong> {tipo ? `${tipo} — ${apelido}` : (payload.id || 'N/A')}</div>
+          {payload.apelido && <div><strong>Novo Apelido:</strong> {payload.apelido}</div>}
         </div>
       );
     } else {
@@ -993,7 +997,7 @@ export default function MasterPanel() {
                                       color: '#3730a3',
                                       fontWeight: 600,
                                       textTransform: 'uppercase'
-                                    }}>{(s.id_tipo_sensor || 'sensor')}</span>
+                                    }}>{typeof s.id_tipo_sensor === 'object' ? s.id_tipo_sensor.descricao : (s.id_tipo_sensor || 'sensor')}</span>
                                     <span style={{ fontWeight: 600 }}>{s.apelido || '—'}</span>
                                     <button onClick={async () => {
                                       try {
@@ -1069,7 +1073,7 @@ export default function MasterPanel() {
             <div key={s._id} style={{ border: '1px solid #eee', borderRadius: 8, padding: 12, marginBottom: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div><b>Tipo:</b> {s.id_tipo_sensor}</div>
+                  <div><b>Tipo:</b> {typeof s.id_tipo_sensor === 'object' ? s.id_tipo_sensor.descricao : s.id_tipo_sensor}</div>
                   <div><b>Apelido:</b> {s.apelido || '—'}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
