@@ -310,17 +310,24 @@ export default function HomeContent() {
                 // Caso venha como string base64 direta
                 if (typeof imageData === 'string') {
                   const str = imageData.trim();
-                  if (str.startsWith('data:image')) {
+                  if (str.length === 0) {
+                    fotoUrl = "/images/cativeiro1.jpg";
+                  } else if (str.startsWith('data:image')) {
                     fotoUrl = str; // já é um data URL
-                  } else {
-                    // assume base64 simples
+                  } else if (str.length > 0) {
+                    // assume base64 simples - validar que não está vazia
                     fotoUrl = `data:image/jpeg;base64,${str}`;
                   }
                 }
 
                 // Caso venha no formato Extended JSON do Mongo
                 if (imageData && typeof imageData === 'object' && imageData.$binary && imageData.$binary.base64) {
-                  fotoUrl = `data:image/jpeg;base64,${imageData.$binary.base64}`;
+                  const base64Str = imageData.$binary.base64;
+                  if (base64Str && typeof base64Str === 'string' && base64Str.trim().length > 0) {
+                    fotoUrl = `data:image/jpeg;base64,${base64Str}`;
+                  } else {
+                    fotoUrl = "/images/cativeiro1.jpg";
+                  }
                 }
 
                 if (Array.isArray(imageData)) {
@@ -342,11 +349,38 @@ export default function HomeContent() {
                 }
 
                 if (!fotoUrl && binary.length > 0 && typeof window !== 'undefined') {
-                  const base64String = window.btoa(binary);
-                  fotoUrl = `data:image/jpeg;base64,${base64String}`;
+                  try {
+                    const base64String = window.btoa(binary);
+                    if (base64String && base64String.length > 0) {
+                      fotoUrl = `data:image/jpeg;base64,${base64String}`;
+                    }
+                  } catch (btoaError) {
+                    console.error('Erro ao converter para base64:', btoaError);
+                    fotoUrl = "/images/cativeiro1.jpg";
+                  }
                 }
               }
-            } catch {}
+            } catch (imgError) {
+              console.error('Erro ao processar imagem do cativeiro:', imgError);
+              fotoUrl = "/images/cativeiro1.jpg";
+            }
+            
+            // Garantir que fotoUrl é válida antes de usar
+            if (!fotoUrl || 
+                (typeof fotoUrl !== 'string') ||
+                (fotoUrl.trim().length === 0) ||
+                (!fotoUrl.startsWith('/') && !fotoUrl.startsWith('data:image') && !fotoUrl.startsWith('http') && !fotoUrl.startsWith('https'))) {
+              fotoUrl = "/images/cativeiro1.jpg";
+            }
+            
+            // Validar data URLs - garantir que o base64 não está vazio
+            if (fotoUrl.startsWith('data:image')) {
+              const base64Part = fotoUrl.split(',')[1];
+              if (!base64Part || base64Part.trim().length === 0) {
+                fotoUrl = "/images/cativeiro1.jpg";
+              }
+            }
+            
             return (
               <div
                 key={cativeiro._id}
@@ -359,6 +393,10 @@ export default function HomeContent() {
                   src={fotoUrl}
                   alt={`Cativeiro ${idx + 1}`}
                   className={styles.cativeiroImg}
+                  onError={(e) => {
+                    console.error('Erro ao carregar imagem do cativeiro:', fotoUrl);
+                    e.target.src = "/images/cativeiro1.jpg";
+                  }}
                 />
                 <div className={styles.cativeiroInfo}>
                   <div className={styles.cativeiroNome}>{cativeiro.nome || `Cativeiro ${idx + 1}`}</div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Modal from '../../components/Modal';
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
+import NavBottom from '@/components/NavBottom';
 
 export default function MyRequests() {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -177,7 +178,8 @@ export default function MyRequests() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 20
+        padding: 20,
+        paddingBottom: '100px'
       }}>
         <div style={{
           background: 'white',
@@ -219,14 +221,25 @@ export default function MyRequests() {
             }
           `}</style>
         </div>
+        <NavBottom />
       </div>
     );
   }
-  if (!isAuthenticated) return <div style={{ padding: 20, color: 'red' }}>Sessão expirada. Faça login novamente.</div>;
-  if (error) return <div style={{ padding: 20, color: 'red' }}>{error}</div>;
+  if (!isAuthenticated) return (
+    <div style={{ padding: 20, color: 'red', paddingBottom: '100px', minHeight: '100vh' }}>
+      Sessão expirada. Faça login novamente.
+      <NavBottom />
+    </div>
+  );
+  if (error) return (
+    <div style={{ padding: 20, color: 'red', paddingBottom: '100px', minHeight: '100vh' }}>
+      {error}
+      <NavBottom />
+    </div>
+  );
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: 20, paddingBottom: '100px' }}>
       <div style={{ position: 'relative', marginBottom: 16 }}>
         <button 
           style={{ 
@@ -368,6 +381,7 @@ export default function MyRequests() {
           </div>
         </div>
       </Modal>
+      <NavBottom />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import axios from "axios";
 import RequestButton from "@/components/RequestButton";
 import SelectTipoCamarao from "@/components/SelectTipoCamarao";
 import Notification from "@/components/Notification";
+import NavBottom from "@/components/NavBottom";
 
 export default function EditCativeiroPage() {
   const router = useRouter();
@@ -62,9 +63,13 @@ export default function EditCativeiroPage() {
     async function fetchFazendas() {
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-        const res = await axios.get(`${apiUrl}/fazendas`);
+        const token = typeof window !== 'undefined' ? (sessionStorage.getItem('token') || localStorage.getItem('token')) : null;
+        const res = await axios.get(`${apiUrl}/fazendas`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
         setFazendas(res.data);
       } catch (err) {
+        console.error('Erro ao buscar fazendas:', err);
         setFazendas([]);
       }
     }
@@ -126,8 +131,32 @@ export default function EditCativeiroPage() {
         setSensores(sensoresCompletos);
       }
       if (cativeiroData.foto_cativeiro && cativeiroData.foto_cativeiro.data) {
-        const base64String = arrayBufferToBase64(cativeiroData.foto_cativeiro.data);
-        setCurrentImageUrl(`data:image/jpeg;base64,${base64String}`);
+        try {
+          const base64String = arrayBufferToBase64(cativeiroData.foto_cativeiro.data);
+          if (base64String && base64String.length > 0 && typeof base64String === 'string') {
+            const imageUrl = `data:image/jpeg;base64,${base64String}`;
+            // Validar se a URL é válida antes de definir
+            try {
+              // Testar se é uma URL válida (data URLs são válidas)
+              if (imageUrl.startsWith('data:image/')) {
+                setCurrentImageUrl(imageUrl);
+              } else {
+                console.warn('URL de imagem inválida gerada');
+                setCurrentImageUrl(null);
+              }
+            } catch (urlError) {
+              console.error('Erro ao validar URL da imagem:', urlError);
+              setCurrentImageUrl(null);
+            }
+          } else {
+            setCurrentImageUrl(null);
+          }
+        } catch (imgError) {
+          console.error('Erro ao processar imagem do cativeiro:', imgError);
+          setCurrentImageUrl(null);
+        }
+      } else {
+        setCurrentImageUrl(null);
       }
       setLoading(false);
     } catch (err) {
@@ -138,11 +167,51 @@ export default function EditCativeiroPage() {
   };
 
   const arrayBufferToBase64 = (buffer) => {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
-    return window.btoa(binary);
+    try {
+      if (!buffer) return '';
+      
+      let binary = '';
+      let imageData = buffer;
+      
+      // Se for um objeto com propriedade data
+      if (buffer && typeof buffer === 'object' && buffer.data) {
+        imageData = buffer.data;
+      }
+      
+      // Se for array
+      if (Array.isArray(imageData)) {
+        for (let i = 0; i < imageData.length; i++) {
+          binary += String.fromCharCode(imageData[i]);
+        }
+      } 
+      // Se for ArrayBuffer ou Buffer
+      else if (imageData instanceof ArrayBuffer) {
+        const bytes = new Uint8Array(imageData);
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+      }
+      // Se for Uint8Array
+      else if (imageData instanceof Uint8Array) {
+        for (let i = 0; i < imageData.length; i++) {
+          binary += String.fromCharCode(imageData[i]);
+        }
+      }
+      // Se for string (já é base64)
+      else if (typeof imageData === 'string') {
+        return imageData;
+      }
+      
+      if (binary.length === 0) {
+        console.warn('Buffer vazio ou formato não suportado');
+        return '';
+      }
+      
+      return typeof window !== 'undefined' ? window.btoa(binary) : Buffer.from(binary, 'binary').toString('base64');
+    } catch (error) {
+      console.error('Erro ao converter buffer para base64:', error);
+      return '';
+    }
   };
 
   const configureTipoCamarao = () => {
@@ -216,6 +285,7 @@ export default function EditCativeiroPage() {
         <div style={{ textAlign: 'center', padding: '50px' }}>
           <p>Carregando dados do cativeiro...</p>
         </div>
+        <NavBottom />
       </div>
     );
   }
@@ -278,9 +348,17 @@ export default function EditCativeiroPage() {
           <span className={styles.uploadFileName}>
             {arquivo ? arquivo.name : (currentImageUrl ? "Foto atual" : "Nenhum arquivo inserido")}
           </span>
-          {currentImageUrl && !arquivo && (
+          {currentImageUrl && !arquivo && currentImageUrl.startsWith('data:image') && (
             <div style={{ marginTop: '8px' }}>
-              <img src={currentImageUrl} alt="Foto atual do cativeiro" style={{ maxWidth: '100px', maxHeight: '100px', borderRadius: '8px', border: '1px solid #ddd' }} />
+              <img 
+                src={currentImageUrl} 
+                alt="Foto atual do cativeiro" 
+                style={{ maxWidth: '100px', maxHeight: '100px', borderRadius: '8px', border: '1px solid #ddd' }}
+                onError={(e) => {
+                  console.error('Erro ao carregar imagem:', e);
+                  e.target.style.display = 'none';
+                }}
+              />
             </div>
           )}
         </div>
@@ -342,11 +420,13 @@ export default function EditCativeiroPage() {
           }}
           onSuccess={handleSubmit}
         />
+        
       </form>
       <div className={styles.logoBox}>
         <img src="/images/logo.svg" alt="Camarize Logo" />
       </div>
       <Notification isVisible={notification.show} message={notification.message} type={notification.type} onClose={hideNotification} />
+      <NavBottom />
     </div>
   );
 } 
