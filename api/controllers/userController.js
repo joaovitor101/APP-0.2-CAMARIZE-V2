@@ -232,7 +232,7 @@ const registerFuncionario = async (req, res) => {
   }
 };
 
-// Cadastro de proprietário (cria solicitação ao invés de usuário direto)
+// Cadastro de proprietário (cria usuário e fazenda diretamente)
 const registerProprietario = async (req, res) => {
   try {
     console.log("🔍 [REGISTER PROPRIETARIO] Dados recebidos:", req.body);
@@ -254,34 +254,35 @@ const registerProprietario = async (req, res) => {
       });
     }
 
-    // Criar solicitação para o master aprovar
-    const requestData = {
-      requesterUser: null, // Ainda não existe usuário
-      requesterRole: 'membro', // Será membro quando aprovado
-      targetRole: 'master',
-      type: 'pesada',
-      action: 'cadastrar_proprietario',
-      payload: {
-        nome,
-        email,
-        senha,
-        foto_perfil,
-        fazenda: {
-          nome: fazenda.nome,
-          rua: fazenda.rua,
-          bairro: fazenda.bairro,
-          cidade: fazenda.cidade,
-          numero: fazenda.numero
-        }
-      }
-    };
+    // Criar fazenda primeiro
+    let fazendaDoc = null;
+    if (fazenda) {
+      fazendaDoc = new Fazendas(fazenda);
+      await fazendaDoc.save();
+      console.log("✅ [REGISTER PROPRIETARIO] Fazenda criada:", fazendaDoc._id);
+    }
+    
+    // Criar usuário como ADMIN (proprietário)
+    console.log("📝 [REGISTER PROPRIETARIO] Criando usuário...");
+    const user = await userService.Create(nome, email, senha, foto_perfil, fazendaDoc ? fazendaDoc._id : undefined, 'admin');
+    console.log("✅ [REGISTER PROPRIETARIO] Usuário criado:", user._id);
 
-    const createdRequest = await requestService.create(requestData);
-    console.log("✅ [REGISTER PROPRIETARIO] Solicitação criada:", createdRequest._id);
+    // Criar relacionamento usuário-fazenda
+    if (fazendaDoc && user) {
+      const relExists = await UsuariosxFazendas.findOne({ 
+        usuario: user._id, 
+        fazenda: fazendaDoc._id 
+      });
+      
+      if (!relExists) {
+        await UsuariosxFazendas.create({ usuario: user._id, fazenda: fazendaDoc._id, ativo: true });
+        console.log('✅ [REGISTER PROPRIETARIO] Relação usuário-fazenda criada');
+      }
+    }
 
     res.status(201).json({ 
-      message: "Solicitação de cadastro enviada com sucesso! Aguarde aprovação do Master.",
-      requestId: createdRequest._id
+      message: "Cadastro realizado com sucesso!",
+      user
     });
   } catch (err) {
     console.error("❌ [REGISTER PROPRIETARIO] Erro:", err);

@@ -14,7 +14,6 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [isRegistering, setIsRegistering] = useState(false);
 
   // Se não tiver tipo, redireciona para register-type
   useEffect(() => {
@@ -28,167 +27,104 @@ export default function AuthPage() {
     setError("");
     setLoading(true);
 
+    // Validar campos obrigatórios
+    if (!nome || !nome.trim()) {
+      setError("Por favor, preencha seu nome completo.");
+      setLoading(false);
+      return;
+    }
+
+    if (!email || !email.trim()) {
+      setError("Por favor, preencha seu email.");
+      setLoading(false);
+      return;
+    }
+
+    if (!senha || senha.length < 6) {
+      setError("A senha deve ter pelo menos 6 caracteres.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
-      // Primeiro, tenta fazer login
-      try {
-        const loginResponse = await axios.post(`${apiUrl}/users/auth`, { email, senha });
-        
-        // Login bem-sucedido
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem("token", loginResponse.data.token);
-          localStorage.setItem("token", loginResponse.data.token);
-        }
+      // Criar conta
+      if (tipo === 'funcionario') {
+        try {
+          const registerResponse = await axios.post(`${apiUrl}/users/register/funcionario`, {
+            nome: nome.trim(),
+            email: email.trim(),
+            senha: senha,
+            foto_perfil: null
+          });
 
-        // Buscar o usuário autenticado
-        const meRes = await axios.get(`${apiUrl}/users/me`, {
-          headers: { Authorization: `Bearer ${loginResponse.data.token}` }
-        });
-        const usuario = meRes.data;
-        
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem("usuarioCamarize", JSON.stringify(usuario));
-          localStorage.setItem("usuarioCamarize", JSON.stringify(usuario));
-        }
+          // Após criar, fazer login automático
+          const loginRes = await axios.post(`${apiUrl}/users/auth`, { email, senha });
+          
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem("token", loginRes.data.token);
+            localStorage.setItem("token", loginRes.data.token);
+          }
 
-        // Verificar se o tipo do usuário bate com o tipo selecionado
-        const userRole = usuario?.role || 'membro';
-        const expectedRole = tipo === 'funcionario' ? 'membro' : 'admin';
-        
-        if (userRole !== expectedRole) {
-          setError(`Este email está cadastrado como ${userRole === 'membro' ? 'funcionário' : 'proprietário'}. Por favor, selecione o tipo correto.`);
+          const meRes = await axios.get(`${apiUrl}/users/me`, {
+            headers: { Authorization: `Bearer ${loginRes.data.token}` }
+          });
+          const usuario = meRes.data;
+          
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem("usuarioCamarize", JSON.stringify(usuario));
+            localStorage.setItem("usuarioCamarize", JSON.stringify(usuario));
+          }
+
+          router.push('/home');
+        } catch (registerError) {
+          const errorMessage = registerError?.response?.data?.error || registerError?.response?.data?.message;
+          if (errorMessage?.toLowerCase().includes('já existe') || errorMessage?.toLowerCase().includes('already exists')) {
+            setError("Este email já está cadastrado. Faça login na página de login.");
+          } else {
+            setError(errorMessage || "Erro ao criar conta. Verifique os dados e tente novamente.");
+          }
           setLoading(false);
-          return;
         }
-
-        // Redireciona conforme a role
-        if (userRole === 'master') router.push('/master');
-        else if (userRole === 'admin') router.push('/admin');
-        else router.push('/home');
-        return;
-      } catch (loginError) {
-        // Se login falhou, verifica se é porque o usuário não existe
-        const loginErrorStatus = loginError?.response?.status;
-        
-        // Se for erro 404 (usuário não encontrado), vamos criar a conta
-        if (loginErrorStatus === 404) {
-          // Se não tiver nome preenchido e estiver tentando criar, pede nome
-          if (!nome || !nome.trim()) {
-            setIsRegistering(true);
-            setError("Preencha seu nome para criar uma nova conta.");
+      } else if (tipo === 'proprietario') {
+        // Para proprietário, precisa preencher dados da fazenda
+        // Salvar dados temporários e redirecionar para página de cadastro de fazenda
+        try {
+          // Verificar se o email já existe antes de salvar os dados temporários
+          try {
+            await axios.post(`${apiUrl}/users/auth`, { email, senha });
+            // Se chegou aqui, o login funcionou, então o email já existe
+            setError("Este email já está cadastrado. Faça login na página de login.");
             setLoading(false);
             return;
-          }
-
-          // Criar conta
-          if (tipo === 'funcionario') {
-            const registerResponse = await axios.post(`${apiUrl}/users/register/funcionario`, {
-              nome: nome.trim(),
-              email: email.trim(),
-              senha: senha,
-              foto_perfil: null
-            });
-
-            // Após criar, fazer login automático
-            const loginRes = await axios.post(`${apiUrl}/users/auth`, { email, senha });
-            
-            if (typeof window !== 'undefined') {
-              sessionStorage.setItem("token", loginRes.data.token);
-              localStorage.setItem("token", loginRes.data.token);
-            }
-
-            const meRes = await axios.get(`${apiUrl}/users/me`, {
-              headers: { Authorization: `Bearer ${loginRes.data.token}` }
-            });
-            const usuario = meRes.data;
-            
-            if (typeof window !== 'undefined') {
-              sessionStorage.setItem("usuarioCamarize", JSON.stringify(usuario));
-              localStorage.setItem("usuarioCamarize", JSON.stringify(usuario));
-            }
-
-            router.push('/home');
-          } else if (tipo === 'proprietario') {
-            // Para proprietário, precisa preencher dados da fazenda
-            // Salvar dados temporários e redirecionar para página de cadastro de fazenda
-            if (typeof window !== 'undefined') {
-              const pendingData = {
-                tipoUsuario: 'proprietario',
-                nome: nome.trim(),
-                email: email.trim(),
-                senha: senha
-              };
-              sessionStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
-              localStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
-            }
-            
-            // Redireciona para página de cadastro de fazenda
-            router.push('/register/proprietario');
-            return;
-          }
-        } else {
-          // Outros erros de login (senha incorreta, etc)
-          // Se o usuário preencheu nome, tenta criar conta mesmo assim
-          if (nome && nome.trim()) {
-            // Tentar criar conta
-            try {
-              if (tipo === 'funcionario') {
-                const registerResponse = await axios.post(`${apiUrl}/users/register/funcionario`, {
-                  nome: nome.trim(),
-                  email: email.trim(),
-                  senha: senha,
-                  foto_perfil: null
-                });
-
-                // Após criar, fazer login automático
-                const loginRes = await axios.post(`${apiUrl}/users/auth`, { email, senha });
-                
-                if (typeof window !== 'undefined') {
-                  sessionStorage.setItem("token", loginRes.data.token);
-                  localStorage.setItem("token", loginRes.data.token);
-                }
-
-                const meRes = await axios.get(`${apiUrl}/users/me`, {
-                  headers: { Authorization: `Bearer ${loginRes.data.token}` }
-                });
-                const usuario = meRes.data;
-                
-                if (typeof window !== 'undefined') {
-                  sessionStorage.setItem("usuarioCamarize", JSON.stringify(usuario));
-                  localStorage.setItem("usuarioCamarize", JSON.stringify(usuario));
-                }
-
-                router.push('/home');
-                return;
-              } else if (tipo === 'proprietario') {
-                // Para proprietário, precisa preencher dados da fazenda
-                // Salvar dados temporários e redirecionar para página de cadastro de fazenda
-                if (typeof window !== 'undefined') {
-                  const pendingData = {
-                    tipoUsuario: 'proprietario',
-                    nome: nome.trim(),
-                    email: email.trim(),
-                    senha: senha
-                  };
-                  sessionStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
-                  localStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
-                }
-                
-                // Redireciona para página de cadastro de fazenda
-                router.push('/register/proprietario');
-                return;
-              }
-            } catch (registerError) {
-              // Se der erro ao criar (email já existe, etc)
-              setError(registerError?.response?.data?.error || "Erro ao criar conta. Verifique os dados e tente novamente.");
+          } catch (loginError) {
+            // Se o login falhou com 404, o usuário não existe, então podemos criar
+            if (loginError?.response?.status !== 404) {
+              // Outro erro (senha incorreta, etc) - email existe
+              setError("Este email já está cadastrado. Faça login na página de login.");
               setLoading(false);
               return;
             }
-          } else {
-            setError("Email ou senha incorretos. Verifique suas credenciais ou preencha o nome para criar uma nova conta.");
-            setLoading(false);
           }
+
+          // Email não existe, salvar dados temporários
+          if (typeof window !== 'undefined') {
+            const pendingData = {
+              tipoUsuario: 'proprietario',
+              nome: nome.trim(),
+              email: email.trim(),
+              senha: senha
+            };
+            sessionStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
+            localStorage.setItem('pendingRegistration', JSON.stringify(pendingData));
+          }
+          
+          // Redireciona para página de cadastro de fazenda
+          router.push('/register/proprietario');
+        } catch (error) {
+          setError(error?.response?.data?.error || "Erro ao processar cadastro. Tente novamente.");
+          setLoading(false);
         }
       }
     } catch (error) {
@@ -221,34 +157,32 @@ export default function AuthPage() {
         }}>
           <span style={{ fontSize: '48px' }}>{tipoIcon}</span>
           <h2 className={styles.loginTitle} style={{ marginBottom: '8px' }}>
-            {isRegistering ? `Cadastre-se como ${tipoLabel}` : `Entre como ${tipoLabel}`}
+            Cadastre-se como {tipoLabel}
           </h2>
           <p style={{ 
             color: '#6b7280', 
             fontSize: '14px',
             margin: 0
           }}>
-            {isRegistering 
-              ? 'Preencha seus dados para criar sua conta'
-              : 'Digite seu email e senha. Se não tiver conta, preencha o nome para criar.'
-            }
+            Preencha seus dados para criar sua conta
           </p>
         </div>
 
-        {isRegistering && (
-          <div className={styles.inputGroup}>
-            <input
-              type="text"
-              name="nome"
-              placeholder="Nome completo"
-              className={styles.input}
-              value={nome}
-              onChange={e => setNome(e.target.value)}
-              autoComplete="name"
-              required
-            />
-          </div>
-        )}
+        <div className={styles.inputGroup}>
+          <input
+            type="text"
+            name="nome"
+            placeholder="Nome completo"
+            className={styles.input}
+            value={nome}
+            onChange={e => {
+              setNome(e.target.value);
+              setError("");
+            }}
+            autoComplete="name"
+            required
+          />
+        </div>
 
         <div className={styles.inputGroup}>
           <input
@@ -277,7 +211,7 @@ export default function AuthPage() {
               setSenha(e.target.value);
               setError("");
             }}
-            autoComplete={isRegistering ? "new-password" : "current-password"}
+            autoComplete="new-password"
             required
           />
           <span
@@ -295,55 +229,29 @@ export default function AuthPage() {
           </span>
         </div>
 
-        {!isRegistering && (
-          <div style={{ 
-            marginBottom: '16px',
-            padding: '12px',
-            background: '#f0f9ff',
-            border: '1px solid #bae6fd',
-            borderRadius: '8px',
-            fontSize: '13px',
-            color: '#0369a1'
-          }}>
-            💡 <strong>Dica:</strong> Se você não tem conta, preencha o nome abaixo e clique novamente para criar.
-          </div>
-        )}
-
-        {!isRegistering && (
-          <div className={styles.inputGroup}>
-            <input
-              type="text"
-              name="nome"
-              placeholder="Nome completo (opcional - para criar conta)"
-              className={styles.input}
-              value={nome}
-              onChange={e => setNome(e.target.value)}
-              autoComplete="name"
-            />
-          </div>
-        )}
-
         {error && <div className={styles.errorMsg}>{error}</div>}
 
         <button
           type="submit"
           className={styles.loginButton}
-          disabled={loading || !email || !senha || (isRegistering && !nome)}
+          disabled={loading || !email || !senha || !nome}
           style={{ 
             background: loading 
               ? "linear-gradient(90deg, #ccc 0%, #999 100%)" 
               : tipoGradient, 
             color: "#fff",
-            cursor: (loading || !email || !senha || (isRegistering && !nome)) ? "not-allowed" : "pointer"
+            cursor: (loading || !email || !senha || !nome) ? "not-allowed" : "pointer"
           }}
         >
-          {loading 
-            ? (isRegistering ? "Criando conta..." : "Entrando...") 
-            : (isRegistering ? "Criar Conta" : "Entrar")
-          }
+          {loading ? "Criando conta..." : "Criar Conta"}
         </button>
 
         <div className={styles.registerRow}>
+          <span>Já tem uma conta?</span>
+          <Link href="/login" className={styles.registerLink}>Fazer login</Link>
+        </div>
+
+        <div className={styles.registerRow} style={{ marginTop: '8px' }}>
           <span>Deseja escolher outro tipo?</span>
           <Link href="/register-type" className={styles.registerLink}>Voltar</Link>
         </div>

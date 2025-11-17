@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import mongoose from "../api/node_modules/mongoose/index.js";
+import mongoose from "mongoose/index.js";
 import dotenv from "dotenv";
 import readline from 'readline';
 // Evitar usar Models do Mongoose aqui para não conflitar instâncias.
@@ -16,7 +16,7 @@ const inferredDbFromUri = (() => {
     return (tail.split('?')[0] || '').trim() || undefined;
   } catch { return undefined; }
 })();
-const dbName = process.env.MONGO_DB_NAME || inferredDbFromUri || 'camarize';
+const dbName = 'camarize';
 
 // Interface de leitura do terminal
 const rl = readline.createInterface({
@@ -55,17 +55,46 @@ async function populateSpecificCativeiros() {
     // Aguardar um pouco para garantir que a conexão está estável
     await new Promise(resolve => setTimeout(resolve, 2000));
     
+    // Debug: Listar todas as coleções
+    console.log("\n🔍 Verificando coleções disponíveis...");
+    const allCollections = await mongoose.connection.db.listCollections().toArray();
+    console.log(`📚 Total de coleções: ${allCollections.length}`);
+    allCollections.forEach(col => {
+      console.log(`   - ${col.name}`);
+    });
+    
+    // Verificar se a coleção cativeiros existe
+    const cativeirosCollectionExists = allCollections.some(col => col.name === 'cativeiros');
+    console.log(`\n✅ Coleção 'cativeiros' existe? ${cativeirosCollectionExists ? 'SIM' : 'NÃO'}`);
+    
+    // Contar documentos na coleção sem filtro
+    const totalDocs = await mongoose.connection.db.collection('cativeiros').countDocuments({});
+    console.log(`📊 Total de documentos na coleção 'cativeiros': ${totalDocs}`);
+    
+    // Buscar TODOS os documentos sem projeção para debug
+    const allDocs = await mongoose.connection.db
+      .collection('cativeiros')
+      .find({})
+      .toArray();
+    console.log(`\n🔍 Documentos encontrados (sem filtro): ${allDocs.length}`);
+    if (allDocs.length > 0) {
+      console.log("📝 Primeiro documento encontrado:");
+      console.log(JSON.stringify(allDocs[0], null, 2));
+    }
+    
     // Buscar cativeiros existentes (consulta leve e com timeout maior) - usando driver nativo
     const t0 = Date.now();
     const cativeiros = await mongoose.connection.db
       .collection('cativeiros')
       .find({}, { projection: { _id: 1, nome: 1, id_tipo_camarao: 1 } })
       .toArray();
-    console.log(`⏱️ cativeiros.find levou ${Date.now() - t0}ms`);
+    console.log(`\n⏱️ cativeiros.find (com projeção) levou ${Date.now() - t0}ms`);
     console.log(`📋 Encontrados ${cativeiros.length} cativeiros`);
     
     if (cativeiros.length === 0) {
-      console.log("❌ Nenhum cativeiro encontrado! Crie um cativeiro primeiro.");
+      console.log("\n❌ Nenhum cativeiro encontrado na coleção 'cativeiros'!");
+      console.log(`   Mas encontramos ${totalDocs} documentos na coleção.`);
+      console.log("   Isso pode indicar um problema com a projeção ou estrutura dos documentos.");
       return;
     }
     
