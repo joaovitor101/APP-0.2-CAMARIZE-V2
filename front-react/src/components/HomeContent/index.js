@@ -8,7 +8,7 @@ import Notification from "../Notification";
 import Modal from '../Modal';
 import GuidedTour from "../GuidedTour";
 
-export default function HomeContent({ sidebarRefs }) {
+export default function HomeContent({ sidebarRefs, hideTour = false }) {
   const router = useRouter();
   const [role, setRole] = useState('membro');
   const [cativeiros, setCativeiros] = useState([]);
@@ -280,7 +280,7 @@ export default function HomeContent({ sidebarRefs }) {
       </section>
 
       {/* Tour guiado - somente na primeira visita */}
-      {showTour && (
+      {showTour && !hideTour && (
         <GuidedTour
           steps={
             [
