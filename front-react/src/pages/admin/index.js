@@ -6,9 +6,10 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/hooks/useAuth';
 import { FaUserCircle } from 'react-icons/fa';
-import { HiOutlineClipboardList, HiOutlineBell, HiOutlineOfficeBuilding, HiOutlineUsers, HiOutlineChatAlt2 } from 'react-icons/hi';
+import { HiOutlineClipboardList, HiOutlineBell, HiOutlineOfficeBuilding, HiOutlineUsers, HiOutlineChatAlt2, HiOutlineChartBar } from 'react-icons/hi';
 import styles from '../../styles/panel.module.css';
 import Notification from '../../components/Notification';
+import AdminMonitoramentoTab from '../../components/AdminMonitoramentoTab';
 
 const CreatableSelect = dynamic(() => import('react-select/creatable'), { ssr: false });
 
@@ -247,7 +248,7 @@ export default function AdminPanel() {
     try {
       const params = new URLSearchParams(window.location.search);
       const qTab = params.get('tab');
-      if (qTab && ['requests', 'solicitacoes', 'cativeiros'].includes(qTab)) {
+      if (qTab && ['requests', 'solicitacoes', 'cativeiros', 'monitoramento'].includes(qTab)) {
         setTab(qTab);
       }
       setInitialTabApplied(true);
@@ -788,6 +789,7 @@ export default function AdminPanel() {
     { id: 'requests', icon: HiOutlineClipboardList, label: 'Histórico' },
     { id: 'solicitacoes', icon: HiOutlineBell, label: 'Solicitações', badge: items.length || null },
     { id: 'cativeiros', icon: HiOutlineOfficeBuilding, label: 'Cativeiros' },
+    { id: 'monitoramento', icon: HiOutlineChartBar, label: 'Monitoramento' },
     { id: 'funcionarios', icon: HiOutlineUsers, label: 'Funcionários' },
     { id: 'chat', icon: HiOutlineChatAlt2, label: 'Chat' },
   ];
@@ -796,6 +798,7 @@ export default function AdminPanel() {
     requests: ['Histórico', 'Histórico de ações dos funcionários'],
     solicitacoes: ['Solicitações', 'Aprovações pendentes de funcionários'],
     cativeiros: ['Fazendas & Cativeiros', 'Gerencie suas fazendas e cativeiros'],
+    monitoramento: ['Monitoramento', 'Dashboard e relatórios dos cativeiros em tempo real'],
     funcionarios: ['Funcionários', 'Equipe associada à sua fazenda'],
     chat: ['Chat com Masters', 'Comunicação com os masters do sistema'],
   };
@@ -1233,6 +1236,10 @@ export default function AdminPanel() {
             </div>
           ))}
         </section>
+      )}
+
+      {tab === 'monitoramento' && (
+        <AdminMonitoramentoTab />
       )}
 
       {tab === 'funcionarios' && (
