@@ -45,7 +45,12 @@ O Docker criará instâncias isoladas tanto para o Backend quanto para o Fronten
 ### 1. Variáveis de Ambiente
 Na raiz da API, copie o template de variáveis de ambiente:
 ```bash
-cp api/.env.docker.example api/.env.docker
+# Dentro de tools/ (ou qualquer pasta, ajuste o --out)
+mongodump --uri="URL_DE_PRODUCAO" --out=./dump
+
+mongorestore \
+  --uri="MONGO_URL=mongodb+srv://USUARIO:SENHA@SEU_CLUSTER.mongodb.net/camarize-dev?retryWrites=true&w=majority" \
+  ./dump/NOME_DO_BANCO_DE_PRODUCAO
 ```
 
 Abra o `api/.env.docker` e certifique-se de preencher as chaves de segurança:
