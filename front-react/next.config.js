@@ -7,9 +7,9 @@ const nextConfig = {
     unoptimized: true
   },
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "/api",
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     // SSE precisa de conexão direta (sem passar pelo proxy do Next.js que buferiza streaming)
-    NEXT_PUBLIC_SSE_URL: process.env.NEXT_PUBLIC_SSE_URL || "http://localhost:4000",
+    NEXT_PUBLIC_SSE_URL: process.env.NEXT_PUBLIC_SSE_URL,
     NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "BHRkSsllT2m1OmHkc6xsGdN7CpJFm0zHrfDuA4xh14kMt750uWzOsSNc5tI7wUS3Y_qYF6CjBBfyfIrlZgCY9cs"
   },
   // Configuração para melhorar o Fast Refresh
