@@ -422,6 +422,7 @@ A maioria dos endpoints requer um token JWT. Para obtê-lo:
           },
         },
 
+
         // ─── CHAT ────────────────────────────────────────────────────────────
         Conversation: {
           type: 'object',
