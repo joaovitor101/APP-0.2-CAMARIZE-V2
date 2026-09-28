@@ -3,3 +3,17 @@ npm-debug.log
 CLAUDE.md
 docs/TECH_DEBT.md
 tools/dump/
+.env
+.env.*
+!.env.example
+!.env.docker.example
+api/.env
+api/.env.docker
+.next/
+dist/
+build/
+coverage/
+.DS_Store
+.vscode/
+.idea/
+*.log
