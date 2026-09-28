@@ -3,45 +3,34 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "npx nodemon index.js",
     "lint": "eslint . --ext .js",
-    "test-api": "node tests/test-api-status.js",
-    "quick-test": "node tests/quick-test.js",
-    "debug": "node tests/debug-database-connection.js",
-    "test-sensor": "node tests/test-sensor-cativeiro.js",
-    "test-cativeiros": "node tests/test-cativeiros-status.js",
-    "populate-parametros": "node tests/populate-parametros.js",
-    "check-condicoes": "node tests/check-condicoes-ideais.js",
-    "view-parametros": "node tests/view-parametros.js",
-    "populate-specific-cativeiros": "node tests/populate-specific-cativeiros.js",
-    "clear-mock-parametros": "node tests/clear-mock-parametros.js",
-    "test-critical-email": "node test-critical-email.js",
-    "clear-all": "node clear-remaining-data.js"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "axios": "^1.11.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "jwt-decode": "^4.0.0",
-    "mongodb": "^6.17.0",
     "mongoose": "^8.16.1",
     "multer": "^2.0.1",
-    "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5",
     "nodemon": "^3.1.10",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "eslint": "^8.57.0"
+    "@vitest/coverage-v8": "^5.0.2",
+    "eslint": "^8.57.0",
+    "vitest": "^5.0.2"
   },
   "type": "module"
 }

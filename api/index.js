@@ -17,10 +17,9 @@ import usuariosxFazendasRoutes from './routes/usuariosxFazendasRoutes.js';
 import sensoresxCativeirosRoutes from './routes/sensoresxCativeirosRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import emailRoutes from './routes/emailRoutes.js';
-import testRoutes from './routes/testRoutes.js';
 import parametrosRoutes from './routes/parametrosRoutes.js';
-import chatRoutes from './routes/chatRoutes.js';
 import dietaRoutes from './routes/dietaRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
 
 // Importar serviço de monitoramento
 import monitoringService from './services/monitoringService.js';
@@ -31,13 +30,6 @@ import './models/FazendasxCativeiros.js';
 import './models/UsuariosxFazendas.js';
 
 const app = express();
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3001",
-
-  "*"
-];
-
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -97,10 +89,9 @@ app.use('/usuariosxfazendas', usuariosxFazendasRoutes);
 app.use('/sensoresxcativeiros', sensoresxCativeirosRoutes);
 app.use('/notifications', notificationRoutes);
 app.use('/email', emailRoutes);
-app.use('/test', testRoutes);
 app.use('/parametros', parametrosRoutes);
-app.use('/chat', chatRoutes);
 app.use('/dietas', dietaRoutes);
+app.use('/chat', chatRoutes);
 import requestRoutes from './routes/requestRoutes.js';
 import { BlockMembersWrite } from './middleware/Auth.js';
 // Bloqueio global de escrita para membros (exceto /requests)

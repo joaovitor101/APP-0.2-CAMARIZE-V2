@@ -139,7 +139,7 @@ const createCativeiro = async (req, res) => {
     } else if (req.body.sensorId && req.body.sensorId !== "") {
       // Fallback para compatibilidade com sensorId único
       try {
-        const relacao = await SensoresxCativeiros.create({
+        await SensoresxCativeiros.create({
           id_sensor: req.body.sensorId,
           id_cativeiro: result._id
         });
@@ -344,7 +344,7 @@ const updateCativeiro = async (req, res) => {
     } else if (req.body.sensorId && req.body.sensorId !== "") {
       // Fallback para compatibilidade com sensorId único
       try {
-        const relacao = await SensoresxCativeiros.create({
+        await SensoresxCativeiros.create({
           id_sensor: req.body.sensorId,
           id_cativeiro: id
         });
@@ -647,15 +647,11 @@ const getCativeirosStatus = async (req, res) => {
 
 // Método específico para atualizar dados do cativeiro sem enviar resposta
 const updateCativeiroData = async (id, data) => {
-  try {
-    const result = await cativeiroService.update(id, data);
-    if (!result) {
-      throw new Error('Cativeiro não encontrado.');
-    }
-    return result;
-  } catch (error) {
-    throw error;
+  const result = await cativeiroService.update(id, data);
+  if (!result) {
+    throw new Error('Cativeiro não encontrado.');
   }
+  return result;
 };
 
 export default {

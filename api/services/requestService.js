@@ -8,7 +8,7 @@ import Dietas from "../models/Dietas.js";
 import DietasxCativeiros from "../models/DietasxCativeiros.js";
 import Sensores from "../models/Sensores.js";
 import SensoresxCativeiros from "../models/SensoresxCativeiros.js";
-import TiposSensor from "../models/Tipos_sensores.js";
+
 
 class RequestService {
   async create({ requesterUser, requesterRole, targetRole, type, action, payload, fazenda }) {
