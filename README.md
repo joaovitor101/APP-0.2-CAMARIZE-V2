@@ -54,7 +54,7 @@ O banco `camarize-dev` começa vazio. Para ter os mesmos dados do banco de produ
 mongodump --uri="URL_DE_PRODUCAO" --out=./dump
 
 mongorestore \
-  --uri="mongodb+srv://joaokusaka27:...@joaocluster.t5exvmz.mongodb.net/camarize-dev?retryWrites=true&w=majority&appName=JoaoCluster" \
+  --uri="MONGO_URL=mongodb+srv://USUARIO:SENHA@SEU_CLUSTER.mongodb.net/camarize-dev?retryWrites=true&w=majority" \
   ./dump/NOME_DO_BANCO_DE_PRODUCAO
 ```
 
