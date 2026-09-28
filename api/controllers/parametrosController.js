@@ -267,7 +267,7 @@ const streamDashboard = async (req, res) => {
       }
     } catch (err) {
       console.error(`[SSE] erro em push() para cativeiroId=${cativeiroId}:`, err.message);
-      try { res.end(); } catch {}
+      try { res.end(); } catch (_ignored) { /* connection already closed */ }
     }
   };
 
@@ -277,7 +277,7 @@ const streamDashboard = async (req, res) => {
   parametrosEmitter.on(eventKey, push);
 
   const keepalive = setInterval(() => {
-    try { res.write(': ping\n\n'); } catch { clearInterval(keepalive); }
+    try { res.write(': ping\n\n'); } catch (_e) { clearInterval(keepalive); }
   }, 15_000);
 
   req.on('close', () => {

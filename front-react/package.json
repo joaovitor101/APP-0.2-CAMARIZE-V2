@@ -11,11 +11,13 @@
   },
   "dependencies": {
     "axios": "^1.6.0",
+    "html2pdf.js": "^0.14.0",
     "jwt-decode": "^4.0.0",
     "next": "14.2.12",
     "react": "^18",
     "react-dom": "^18",
-    "react-icons": "^5.5.0"
+    "react-icons": "^5.5.0",
+    "react-select": "^5.10.2"
   },
   "devDependencies": {
     "@types/node": "^20",

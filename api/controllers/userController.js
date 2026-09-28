@@ -1,10 +1,9 @@
 import userService from "../services/userService.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import fazendaController from "./fazendaController.js";
+
 import Fazendas from "../models/Fazendas.js";
-import emailService from "../services/emailService.js";
-import requestService from "../services/requestService.js";
+
 import UsuariosxFazendas from "../models/UsuariosxFazendas.js";
 
 // JWTSecret — obrigatório no .env, sem fallback
@@ -41,7 +40,8 @@ const getCurrentUser = async (req, res) => {
     if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
     
     // Remove a senha do objeto retornado por segurança
-    const { senha, ...userWithoutPassword } = user.toObject();
+    const userWithoutPassword = user.toObject();
+    delete userWithoutPassword.senha;
     
     res.json(userWithoutPassword);
   } catch (err) {
@@ -56,7 +56,7 @@ const createUser = async (req, res) => {
   try {
     console.log("Dados recebidos para cadastro:", req.body); // Log dos dados recebidos
     const { nome, email, senha, foto_perfil, fazenda, role } = req.body;
-    const user = await userService.Create(nome, email, senha, foto_perfil, fazenda, role);
+    await userService.Create(nome, email, senha, foto_perfil, fazenda, role);
     res.sendStatus(201); // Cod. 201 (CREATED)
   } catch (error) {
     console.log("Erro ao salvar usuário:", error); // Log do erro
@@ -189,8 +189,9 @@ const updateUser = async (req, res) => {
     }
 
     const updated = await userService.updateUser(id, fields);
-    const { senha: _, ...userWithoutPassword } = updated.toObject();
-    res.json({ message: "Usuário atualizado com sucesso!", user: userWithoutPassword });
+    const userObj = updated.toObject();
+    delete userObj.senha;
+    res.json({ message: "Usuário atualizado com sucesso!", user: userObj });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -658,7 +659,7 @@ const atualizarStatusFuncionario = async (req, res) => {
       : relFuncionario._id;
     
     // Atualizar o status ativo/inativo
-    const updateResult = await UsuariosxFazendas.updateOne(
+    await UsuariosxFazendas.updateOne(
       { _id: relId },
       { $set: { ativo: ativo === true } }
     );

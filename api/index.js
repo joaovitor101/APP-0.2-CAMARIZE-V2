@@ -30,13 +30,6 @@ import './models/FazendasxCativeiros.js';
 import './models/UsuariosxFazendas.js';
 
 const app = express();
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3001",
-
-  "*"
-];
-
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
